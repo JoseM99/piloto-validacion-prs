@@ -3,3 +3,5 @@ CREATE TABLE Ventas_Región (
        Nombre STRING
    )
 
+
+
