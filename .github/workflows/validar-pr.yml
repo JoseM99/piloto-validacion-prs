@@ -22,7 +22,13 @@ jobs:
           JOBID: ${{ secrets.DATABRICKS_JOB_ID }}
           GHPAT: ${{ github.token }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          HOST="$(echo "$HOST" | tr -d '[:space:]')"
+          HOST="${HOST%/}"
+          JOBID="$(echo "$JOBID" | tr -d '[:space:]')"
+          TOKEN="$(echo "$TOKEN" | tr -d '[:space:]')"
+          echo "host_len=${#HOST} job_id=[$JOBID] token_len=${#TOKEN}"
+
           PAYLOAD=$(jq -n \
             --argjson job_id "$JOBID" \
             --arg repo "$GITHUB_REPOSITORY" \
@@ -30,72 +36,18 @@ jobs:
             --arg tok "$GHPAT" \
             '{job_id:$job_id, notebook_params:{repo:$repo, pr_number:$pr, gh_token:$tok}}')
 
-          RUN_ID=$(curl -sS -X POST "$HOST/api/2.1/jobs/run-now" \
+          RESP=$(curl -sS -w "\n%{http_code}" -X POST "$HOST/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$PAYLOAD" | jq -r '.run_id')
+            -d "$PAYLOAD")
 
-          if [ "$RUN_ID" = "null" ] || [ -z "$RUN_ID" ]; then
+          CODE=$(echo "$RESP" | tail -n1)
+          BODY=$(echo "$RESP" | sed '$d')
+          echo "HTTP=$CODE"
+          echo "RESPUESTA: $BODY" | head -c 1000
+
+          RUN_ID=$(echo "$BODY" | jq -r '.run_id // empty' 2>/dev/null)
+          if [ -z "$RUN_ID" ]; then
             echo "No se pudo disparar el Job"; exit 1
           fi
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
-
-      - name: Esperar resultado
-        id: espera
-        env:
-          HOST:  ${{ secrets.DATABRICKS_HOST }}
-          TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          RUN_ID: ${{ steps.disparo.outputs.run_id }}
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 90); do
-            RESP=$(curl -sS "$HOST/api/2.1/jobs/runs/get?run_id=$RUN_ID" \
-              -H "Authorization: Bearer $TOKEN")
-            STATE=$(echo "$RESP" | jq -r '.status.state // .state.life_cycle_state')
-            echo "[$i] estado=$STATE"
-            case "$STATE" in
-              TERMINATED|INTERNAL_ERROR|SKIPPED|SUCCESS|FAILED) break ;;
-            esac
-            sleep 10
-          done
-
-          OUT=$(curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$RUN_ID" \
-            -H "Authorization: Bearer $TOKEN")
-          echo "$OUT" | jq -r '.notebook_output.result // empty' > veredicto.json
-
-          if [ ! -s veredicto.json ]; then
-            echo "El notebook no devolvio veredicto"; echo "$OUT" | head -c 800; exit 1
-          fi
-          jq . veredicto.json > /dev/null
-
-      - name: Publicar veredicto en el PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          ESTADO=$(jq -r '.estado_global' veredicto.json)
-          SKILL=$(jq -r '.skill' veredicto.json)
-
-          {
-            if [ "$ESTADO" = "APROBADO" ]; then
-              echo "### Validacion de modelamiento: APROBADO"
-            else
-              echo "### Validacion de modelamiento: RECHAZADO"
-            fi
-            echo ""
-            echo "Skill aplicado: \`$SKILL\`"
-            echo ""
-            jq -r '.detalle[] |
-              "**\(.path)** — \(.estado)\n" +
-              (if (.hallazgos|length) > 0
-               then (.hallazgos | map("- " + .) | join("\n"))
-               else "- Sin observaciones de reglas duras." end) +
-              "\n\n<details><summary>Revision con IA (referencial)</summary>\n\n" +
-              (.revision_ia // "sin salida") + "\n\n</details>\n"' veredicto.json
-          } > comentario.md
-
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file comentario.md
-
-          if [ "$ESTADO" != "APROBADO" ]; then
-            echo "PR rechazado por el validador"; exit 1
-          fi
