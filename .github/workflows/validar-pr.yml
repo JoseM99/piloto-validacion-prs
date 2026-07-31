@@ -26,7 +26,6 @@ jobs:
           HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
           JOBID="$(echo "$JOBID" | tr -d '[:space:]')"
           TOKEN="$(echo "$TOKEN" | tr -d '[:space:]')"
-          echo "host_len=${#HOST} token_len=${#TOKEN}"
 
           PAYLOAD=$(jq -n \
             --argjson job_id "$JOBID" \
@@ -43,11 +42,10 @@ jobs:
           CODE=$(echo "$RESP" | tail -n1)
           BODY=$(echo "$RESP" | sed '$d')
           echo "HTTP=$CODE"
-          echo "RESPUESTA: $BODY" | head -c 1000
 
           RUN_ID=$(echo "$BODY" | jq -r '.run_id // empty' 2>/dev/null)
           if [ -z "$RUN_ID" ]; then
-            echo "No se pudo disparar el Job"; exit 1
+            echo "No se pudo disparar el Job"; echo "$BODY" | head -c 800; exit 1
           fi
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
@@ -62,6 +60,7 @@ jobs:
           HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
           TOKEN="$(echo "$TOKEN" | tr -d '[:space:]')"
 
+          RESP=""
           for i in $(seq 1 90); do
             RESP=$(curl -sS "$HOST/api/2.1/jobs/runs/get?run_id=$RUN_ID" \
               -H "Authorization: Bearer $TOKEN")
@@ -73,7 +72,11 @@ jobs:
             sleep 10
           done
 
-          OUT=$(curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$RUN_ID" \
+          TASK_RUN_ID=$(echo "$RESP" | jq -r '.tasks[0].run_id // empty')
+          if [ -z "$TASK_RUN_ID" ]; then TASK_RUN_ID="$RUN_ID"; fi
+          echo "task_run_id=$TASK_RUN_ID"
+
+          OUT=$(curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TASK_RUN_ID" \
             -H "Authorization: Bearer $TOKEN")
           echo "$OUT" | jq -r '.notebook_output.result // empty' > veredicto.json
 
