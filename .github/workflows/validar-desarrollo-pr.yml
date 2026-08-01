@@ -13,6 +13,14 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: validador-dev-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  MARCA: "<!-- validador-lakehouse-dev -->"
+  TOPE_HALLAZGOS: 20
+
 jobs:
   desarrollo:
     runs-on: ubuntu-latest
@@ -26,32 +34,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python validators/nodo1_desarrollo.py
 
-      - name: Comentar veredicto del Nodo 1
-        id: comentario
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -uo pipefail
-          ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json)
-          {
-            echo "### Desarrollo Lakehouse (Nodo 1): $ESTADO"
-            echo ""
-            echo "Skill: \`$(jq -r '.skill' veredicto_desarrollo.json)\`"
-            echo ""
-            jq -r 'if (.hallazgos|length) > 0
-                   then (.hallazgos[] |
-                     "- **\(.regla_id)** (checklist \(.checklist_nro)) · \(.criticidad) — \(.explicacion)\n  `\(.evidencia)`  \n  _\(.archivo)_")
-                   else "- Sin hallazgos deterministas." end' veredicto_desarrollo.json
-          } > comentario_dev.md
-
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            -R "$GITHUB_REPOSITORY" --body-file comentario_dev.md
-
-          echo "estado=$ESTADO" >> $GITHUB_OUTPUT
-
-      - name: Nodo 2 - revision con IA (referencial)
-        if: always()
+      - name: Nodo 2 - revision con IA (solo si Nodo 1 aprueba)
+        id: nodo2
+        if: steps.nodo1.outcome == 'success'
         continue-on-error: true
         env:
           HOST:  ${{ secrets.DATABRICKS_HOST }}
@@ -72,7 +57,6 @@ jobs:
             | jq -r '.run_id // empty')
 
           if [ -z "$RUN_ID" ]; then echo "No se pudo disparar el Nodo 2"; exit 0; fi
-          echo "run_id=$RUN_ID"
 
           RESP=""
           for i in $(seq 1 60); do
@@ -87,29 +71,69 @@ jobs:
           TRID=$(echo "$RESP" | jq -r '.tasks[0].run_id // empty')
           if [ -z "$TRID" ]; then TRID="$RUN_ID"; fi
 
-          echo "task_run_id=$TRID"
-          OUT=$(curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
-           -H "Authorization: Bearer $TOKEN")
-          echo "$OUT" | jq -r '.notebook_output.result // empty' > ia.json
+          curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
+            -H "Authorization: Bearer $TOKEN" | jq -r '.notebook_output.result // empty' > ia.json
 
-          if [ ! -s ia.json ]; then
-            echo "Sin salida del Nodo 2. Respuesta cruda:"
-            echo "$OUT" | head -c 800
-            exit 0
-          fi
+          if [ ! -s ia.json ]; then echo "Sin salida del Nodo 2"; rm -f ia.json; exit 0; fi
+
+      - name: Publicar comentario unico
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json)
+          TOTAL=$(jq '.hallazgos | length' veredicto_desarrollo.json)
 
           {
-            echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
+            echo "$MARCA"
+            echo "### Desarrollo Lakehouse: $ESTADO"
             echo ""
-            jq -r 'if (.hallazgos|length) > 0
-                   then (.hallazgos[] | "- **\(.regla_id)** · confianza \(.confianza // "?") — \(.explicacion)\n  `\(.evidencia)` \n  _\(.archivo)_")
-                   else "- Sin observaciones adicionales." end' ia.json
+            echo "Skill: \`$(jq -r '.skill' veredicto_desarrollo.json)\` · archivos evaluados: $(jq '.archivos_evaluados | length' veredicto_desarrollo.json) · hallazgos: $TOTAL"
             echo ""
-            echo "</details>"
-          } > ia.md
 
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            -R "$GITHUB_REPOSITORY" --body-file ia.md
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "Sin hallazgos deterministas."
+            else
+              jq -r --argjson tope "$TOPE_HALLAZGOS" '
+                .hallazgos
+                | group_by(.archivo)
+                | map({archivo: .[0].archivo, items: .})
+                | .[]
+                | "**\(.archivo)**\n" +
+                  (.items[:$tope] | map("- `\(.regla_id)` · \(.criticidad) — \(.explicacion)  \n  `\(.evidencia)`") | join("\n")) +
+                  (if (.items | length) > $tope
+                   then "\n- _… y \(.items | length - $tope) hallazgo(s) mas en el log del check._"
+                   else "" end) + "\n"' veredicto_desarrollo.json
+            fi
+
+            if [ -s ia.json ]; then
+              echo ""
+              echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
+              echo ""
+              jq -r 'if (.hallazgos|length) > 0
+                     then (.hallazgos[] | "- `\(.regla_id)` · \(.confianza // "?") — \(.explicacion)  \n  `\(.evidencia)`  \n  _\(.archivo)_")
+                     else "- Sin observaciones adicionales." end' ia.json
+              echo ""
+              echo "</details>"
+            elif [ "${{ steps.nodo1.outcome }}" != "success" ]; then
+              echo ""
+              echo "_La revision con IA se omite mientras existan hallazgos obligatorios._"
+            fi
+          } > comentario.md
+
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+                 --jq "[.[] | select(.body | contains(\"$MARCA\"))] | last | .id // empty")
+
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" -F body=@comentario.md
+            echo "Comentario $ID actualizado"
+          else
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md
+            echo "Comentario creado"
+          fi
 
       - name: Estado final del check
         if: always()
