@@ -1,3 +1,27 @@
-df = spark.sql("SELECT * FROM ventas")        # rompe SQL-01
-password = "1234secreto"                       # rompe SEG-01
-df.write.save("/mnt/datos/salida")  
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import json\n",
+    "catalogo = \"mb_silver_prod\"\n",
+    "\n",
+    "def procesar(df):\n",
+    "    return df.select(\"a\")\n",
+    "\n",
+    "import re\n",
+    "\n",
+    "miVariable = 5\n",
+    "print(\"iniciando proceso\")\n",
+    "df2 = spark.read.option(\"mergeSchema\", True).load(catalogo)\n",
+    "spark.sql(\"select * from mb_silver_prod.mmff.m_party\")\n"
+   ]
+  }
+ ],
+ "metadata": {"language_info": {"name": "python"}},
+ "nbformat": 4,
+ "nbformat_minor": 0
+}
