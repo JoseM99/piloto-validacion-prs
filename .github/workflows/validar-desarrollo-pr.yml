@@ -1,0 +1,49 @@
+name: Validar desarrollo Lakehouse
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**.ipynb'
+      - '**.py'
+      - '**/pipelines/**.json'
+      - '**/datasets/**.json'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  desarrollo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nodo 1 - reglas deterministas
+        id: nodo1
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python validators/nodo1_desarrollo.py
+
+      - name: Comentar veredicto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json)
+          {
+            echo "### Desarrollo Lakehouse (Nodo 1): $ESTADO"
+            echo ""
+            echo "Skill: \`$(jq -r '.skill' veredicto_desarrollo.json)\`"
+            echo ""
+            jq -r 'if (.hallazgos|length) > 0
+                   then (.hallazgos[] |
+                     "- **\(.regla_id)** (checklist \(.checklist_nro)) · \(.criticidad) — \(.explicacion)\n  `\(.evidencia)`  \n  _\(.archivo)_")
+                   else "- Sin hallazgos deterministas." end' veredicto_desarrollo.json
+          } > comentario_dev.md
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            -R "$GITHUB_REPOSITORY" --body-file comentario_dev.md
+
+          [ "$ESTADO" = "APROBADO" ] || exit 1
