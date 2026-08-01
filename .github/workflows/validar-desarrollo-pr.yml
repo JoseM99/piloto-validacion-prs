@@ -86,12 +86,14 @@ jobs:
           set -uo pipefail
           ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json)
           TOTAL=$(jq '.hallazgos | length' veredicto_desarrollo.json)
+          ARCHIVOS=$(jq '.archivos_evaluados | length' veredicto_desarrollo.json)
+          FECHA=$(TZ='America/Lima' date +"%d/%m/%Y %H:%M")
 
           {
             echo "$MARCA"
             echo "### Desarrollo Lakehouse: $ESTADO"
             echo ""
-            echo "Skill: \`$(jq -r '.skill' veredicto_desarrollo.json)\` · archivos evaluados: $(jq '.archivos_evaluados | length' veredicto_desarrollo.json) · hallazgos: $TOTAL"
+            echo "Skill: \`$(jq -r '.skill' veredicto_desarrollo.json)\` · archivos evaluados: $ARCHIVOS · hallazgos: $TOTAL"
             echo ""
 
             if [ "$TOTAL" -eq 0 ]; then
@@ -114,7 +116,7 @@ jobs:
               echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
               echo ""
               jq -r 'if (.hallazgos|length) > 0
-                     then (.hallazgos[] | "- `\(.regla_id)` · \(.confianza // "?") — \(.explicacion)  \n  `\(.evidencia)`  \n  _\(.archivo)_")
+                     then (.hallazgos[] | "- `\(.regla_id)` · \(.confianza // "?") — \(.explicacion)  \n  `\((.evidencia // "") | gsub("[\\n\\r]+"; " ") | .[0:120])`  \n  _\(.archivo)_")
                      else "- Sin observaciones adicionales." end' ia.json
               echo ""
               echo "</details>"
@@ -122,6 +124,9 @@ jobs:
               echo ""
               echo "_La revision con IA se omite mientras existan hallazgos obligatorios._"
             fi
+
+            echo ""
+            echo "<sub>Actualizado: $FECHA · [run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>"
           } > comentario.md
 
           ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
