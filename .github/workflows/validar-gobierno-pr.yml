@@ -1,0 +1,39 @@
+name: Validar gobierno del PR
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gobierno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar plantilla del PR
+        id: val
+        continue-on-error: true
+        run: python validators/nodo1_pr_gobierno.py
+
+      - name: Comentar veredicto
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          ESTADO=$(jq -r '.estado_global' veredicto_gobierno.json)
+          {
+            echo "### Gobierno del PR: $ESTADO"
+            echo ""
+            jq -r 'if (.hallazgos|length) > 0
+                   then (.hallazgos[] | "- **\(.regla_id)** (checklist \(.checklist_nro)) — \(.explicacion)")
+                   else "- Plantilla del PR completa." end' veredicto_gobierno.json
+          } > comentario_gob.md
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            -R "$GITHUB_REPOSITORY" --body-file comentario_gob.md
+
+          [ "$ESTADO" = "APROBADO" ] || exit 1
