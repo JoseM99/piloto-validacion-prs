@@ -114,10 +114,21 @@ def reglas_notebook(path, codigo, markdown):
                          "Hay imports despues de la seccion de funciones."))
 
     # NBK-03 docstrings
-    for m in re.finditer(r"^(\s*)def\s+(\w+)\s*\([^)]*\)\s*(->[^:]+)?:\s*\n((?:\1\s+.*\n)?)",
-                         codigo, re.M):
-        if not re.match(r"\s*(\"\"\"|''')", m.group(4) or ""):
-            out.append(h("NBK-03", 29, path, f"def {m.group(2)}(...)",
+    lineas = codigo.split("\n")
+    for i, ln in enumerate(lineas):
+        m_def = re.match(r"\s*def\s+(\w+)\s*\(", ln)
+        if not m_def:
+            continue
+        j = i
+        while j < len(lineas) and not lineas[j].rstrip().endswith(":"):
+            j += 1
+        siguiente = ""
+        for k in range(j + 1, min(j + 4, len(lineas))):
+            if lineas[k].strip():
+                siguiente = lineas[k].strip()
+                break
+        if siguiente[:3] not in ('"""', "'''"):
+            out.append(h("NBK-03", 29, path, "def " + m_def.group(1) + "(...)",
                          "La funcion no tiene docstring."))
 
     # NBK-04 widgets
