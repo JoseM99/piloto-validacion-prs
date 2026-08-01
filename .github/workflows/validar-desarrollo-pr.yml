@@ -26,7 +26,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python validators/nodo1_desarrollo.py
 
-      - name: Comentar veredicto
+      - name: Comentar veredicto del Nodo 1
+        id: comentario
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -46,4 +48,66 @@ jobs:
           gh pr comment "${{ github.event.pull_request.number }}" \
             -R "$GITHUB_REPOSITORY" --body-file comentario_dev.md
 
+          echo "estado=$ESTADO" >> $GITHUB_OUTPUT
+
+      - name: Nodo 2 - revision con IA (referencial)
+        if: always()
+        continue-on-error: true
+        env:
+          HOST:  ${{ secrets.DATABRICKS_HOST }}
+          TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          JOBID: ${{ secrets.DATABRICKS_JOB_ID_DEV }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
+          HALL=$(jq -c '[.hallazgos[] | {regla_id}]' veredicto_desarrollo.json)
+
+          RUN_ID=$(curl -sS -X POST "$HOST/api/2.1/jobs/run-now" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d "$(jq -n --argjson job_id "$JOBID" --arg repo "$GITHUB_REPOSITORY" \
+                   --arg pr "${{ github.event.pull_request.number }}" \
+                   --arg tok "$GH_TOKEN" --arg h "$HALL" \
+                   '{job_id:$job_id, notebook_params:{repo:$repo, pr_number:$pr, gh_token:$tok, hallazgos_nodo1:$h}}')" \
+            | jq -r '.run_id // empty')
+
+          if [ -z "$RUN_ID" ]; then echo "No se pudo disparar el Nodo 2"; exit 0; fi
+          echo "run_id=$RUN_ID"
+
+          RESP=""
+          for i in $(seq 1 60); do
+            RESP=$(curl -sS "$HOST/api/2.1/jobs/runs/get?run_id=$RUN_ID" \
+              -H "Authorization: Bearer $TOKEN")
+            ST=$(echo "$RESP" | jq -r '.status.state // .state.life_cycle_state // "?"')
+            echo "[$i] estado=$ST"
+            case "$ST" in TERMINATED|INTERNAL_ERROR|SKIPPED|SUCCESS|FAILED) break ;; esac
+            sleep 10
+          done
+
+          TRID=$(echo "$RESP" | jq -r '.tasks[0].run_id // empty')
+          if [ -z "$TRID" ]; then TRID="$RUN_ID"; fi
+
+          curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
+            -H "Authorization: Bearer $TOKEN" | jq -r '.notebook_output.result // empty' > ia.json
+
+          if [ ! -s ia.json ]; then echo "Sin salida del Nodo 2"; exit 0; fi
+
+          {
+            echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
+            echo ""
+            jq -r 'if (.hallazgos|length) > 0
+                   then (.hallazgos[] | "- **\(.regla_id)** · confianza \(.confianza // "?") — \(.explicacion)\n  `\(.evidencia)`")
+                   else "- Sin observaciones adicionales." end' ia.json
+            echo ""
+            echo "</details>"
+          } > ia.md
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            -R "$GITHUB_REPOSITORY" --body-file ia.md
+
+      - name: Estado final del check
+        if: always()
+        run: |
+          ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json 2>/dev/null || echo "ERROR")
+          echo "Veredicto Nodo 1: $ESTADO"
           [ "$ESTADO" = "APROBADO" ] || exit 1
