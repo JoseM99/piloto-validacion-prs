@@ -87,10 +87,16 @@ jobs:
           TRID=$(echo "$RESP" | jq -r '.tasks[0].run_id // empty')
           if [ -z "$TRID" ]; then TRID="$RUN_ID"; fi
 
-          curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
-            -H "Authorization: Bearer $TOKEN" | jq -r '.notebook_output.result // empty' > ia.json
+          echo "task_run_id=$TRID"
+          OUT=$(curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
+           -H "Authorization: Bearer $TOKEN")
+          echo "$OUT" | jq -r '.notebook_output.result // empty' > ia.json
 
-          if [ ! -s ia.json ]; then echo "Sin salida del Nodo 2"; exit 0; fi
+          if [ ! -s ia.json ]; then
+            echo "Sin salida del Nodo 2. Respuesta cruda:"
+            echo "$OUT" | head -c 800
+            exit 0
+          fi
 
           {
             echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
