@@ -160,8 +160,7 @@ def reglas_notebook(path, codigo, markdown):
             continue
         if not nom.split("_")[0].lower() in PREFIJOS_FUNC:
             out.append(h("PY-01", 32, path, f"def {nom}",
-                         "La funcion no usa un prefijo valido (get/read/write/validate...).",
-                         "OPC"))
+                         "La funcion no usa un prefijo valido (get/read/write/validate...)."))
 
     # PYS-04 esquemas
     for m in re.finditer(r"(mergeSchema|overwriteSchema)", limpio):
