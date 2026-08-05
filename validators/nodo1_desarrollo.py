@@ -304,6 +304,11 @@ def main():
         if path.lower().endswith(".ipynb"):
             codigo, markdown = extraer_codigo_ipynb(texto)
             if codigo is None:
+                evaluados.append(path)
+                hallazgos.append(h("FMT-01", 0, path, texto[:120],
+                                   "El notebook no es un JSON valido y no pudo "
+                                   "analizarse. Revise comas colgantes o comillas "
+                                   "sin cerrar."))
                 continue
         else:
             codigo, markdown = texto, ""
