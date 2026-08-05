@@ -91,8 +91,6 @@ def reglas_notebook(path, codigo, markdown):
     out = []
     limpio = sin_comentarios(codigo)
     en_process = "/process/" in path.lower()
-
-    # NBK-01 cabecera
     bloque = re.search(r"(?:^[ \t]*#.*\n){3,}", codigo[:1200], re.M)
     cabecera = (markdown or "") + "\n" + (bloque.group(0) if bloque else "")
     faltan = [k for k, pat in [
