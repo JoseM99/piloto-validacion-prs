@@ -93,13 +93,14 @@ def reglas_notebook(path, codigo, markdown):
     en_process = "/process/" in path.lower()
 
     # NBK-01 cabecera
-    cabecera = (markdown or "") + "\n" + codigo[:1500]
+    bloque = re.search(r"(?:^[ \t]*#.*\n){3,}", codigo[:1200], re.M)
+    cabecera = (markdown or "") + "\n" + (bloque.group(0) if bloque else "")
     faltan = [k for k, pat in [
-        ("objetivo", r"objetivo|proyecto"),
-        ("version", r"versi[oó]n|version"),
-        ("desarrollador", r"desarrollador|autor"),
-        ("fecha", r"fecha"),
-    ] if not re.search(pat, cabecera, re.I)]
+        ("objetivo", r"^\s*#?\s*(objetivo|proyecto)\b"),
+        ("version", r"^\s*#?\s*versi[oó]n?\b"),
+        ("desarrollador", r"^\s*#?\s*(desarrollador|autor)\b"),
+        ("fecha", r"^\s*#?\s*fecha\b"),
+    ] if not re.search(pat, cabecera, re.I | re.M)]
     if faltan:
         out.append(h("NBK-01", 27, path, cabecera[:120],
                      "Cabecera incompleta, faltan: " + ", ".join(faltan)))
@@ -177,6 +178,22 @@ def reglas_notebook(path, codigo, markdown):
         if not re.search(r"logger\.(info|debug)\s*\(.*(param|widget)", limpio, re.I):
             out.append(h("LOG-03", 47, path, "(sin log de parametros)",
                          "Falta el registro de los parametros de entrada."))
+
+        tiempo = re.search(r"(perf_counter|process_time|monotonic|time\.time\s*\()", limpio)
+        if not tiempo:
+            tiempo = re.search(r"logger\.\w+\s*\(.*(tiempo|duracion|segundos|elapsed)",
+                               limpio, re.I)
+        if not tiempo:
+            out.append(h("LOG-04", 48, path, "(sin medicion de tiempos)",
+                         "Falta el registro de tiempos por etapa del proceso.", "OPC"))
+
+        m_exc = re.search(r"^\s*except\b", limpio, re.M)
+        if not m_exc:
+            out.append(h("LOG-05", 49, path, "(sin bloque try/except)",
+                         "No se capturan excepciones en el proceso.", "OPC"))
+        elif not re.search(r"logger\.(error|exception|critical)\s*\(", limpio):
+            out.append(h("LOG-05", 49, path, m_exc.group(0).strip(),
+                         "Las excepciones no se registran con logger.error.", "OPC"))
 
     for m in re.finditer(r"^\s*print\s*\(", limpio, re.M):
         out.append(h("LOG-06", 50, path, m.group(0).strip(),
