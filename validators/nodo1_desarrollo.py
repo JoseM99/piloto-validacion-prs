@@ -15,6 +15,10 @@ API = "https://api.github.com"
 # Mientras no se resuelvan, no se reportan (ver hoja "Mapeo Skills").
 REGLAS_EN_CONFLICTO = {"PY-04"}
 
+# Carpetas de infraestructura del propio validador: no son codigo de datos
+# y no deben evaluarse contra las reglas del estandar.
+EXCLUIDOS = {"validators", "tests", ".github", "skills", "experimentos", "docs"}
+
 FUENTES = {"data", "core", "satelites", "apps", "dataentrys"}
 TIPOS = {"process", "config", "ddl", "metadata", "utils"}
 
@@ -282,6 +286,8 @@ def main():
         if a["status"] == "removed":
             continue
         if not path.lower().endswith((".ipynb", ".py", ".json")):
+            continue
+        if EXCLUIDOS & {p.lower() for p in path.split("/")}:
             continue
         if not os.path.exists(path):
             continue
