@@ -15,6 +15,10 @@ API = "https://api.github.com"
 # Mientras no se resuelvan, no se reportan (ver hoja "Mapeo Skills").
 REGLAS_EN_CONFLICTO = {"PY-04"}
 
+# Carpetas de infraestructura del propio validador: no son codigo de datos
+# y no deben evaluarse contra las reglas del estandar.
+EXCLUIDOS = {"validators", "tests", ".github", "skills", "experimentos", "docs"}
+
 FUENTES = {"data", "core", "satelites", "apps", "dataentrys"}
 TIPOS = {"process", "config", "ddl", "metadata", "utils"}
 
@@ -92,7 +96,7 @@ def reglas_notebook(path, codigo, markdown):
     limpio = sin_comentarios(codigo)
     en_process = "/process/" in path.lower()
 
-# NBK-01 cabecera
+    # NBK-01 cabecera
     bloque = re.search(r"(?:^[ \t]*#.*\n){3,}", codigo[:1200], re.M)
     cabecera = (markdown or "") + "\n" + (bloque.group(0) if bloque else "")
     faltan = [k for k, pat in [
@@ -179,6 +183,22 @@ def reglas_notebook(path, codigo, markdown):
             out.append(h("LOG-03", 47, path, "(sin log de parametros)",
                          "Falta el registro de los parametros de entrada."))
 
+        tiempo = re.search(r"(perf_counter|process_time|monotonic|time\.time\s*\()", limpio)
+        if not tiempo:
+            tiempo = re.search(r"logger\.\w+\s*\(.*(tiempo|duracion|segundos|elapsed)",
+                               limpio, re.I)
+        if not tiempo:
+            out.append(h("LOG-04", 48, path, "(sin medicion de tiempos)",
+                         "Falta el registro de tiempos por etapa del proceso.", "OPC"))
+
+        m_exc = re.search(r"^\s*except\b", limpio, re.M)
+        if not m_exc:
+            out.append(h("LOG-05", 49, path, "(sin bloque try/except)",
+                         "No se capturan excepciones en el proceso.", "OPC"))
+        elif not re.search(r"logger\.(error|exception|critical)\s*\(", limpio):
+            out.append(h("LOG-05", 49, path, m_exc.group(0).strip(),
+                         "Las excepciones no se registran con logger.error.", "OPC"))
+
     for m in re.finditer(r"^\s*print\s*\(", limpio, re.M):
         out.append(h("LOG-06", 50, path, m.group(0).strip(),
                      "No se permite print(); usar el logger."))
@@ -187,6 +207,8 @@ def reglas_notebook(path, codigo, markdown):
     for m in re.finditer(r"""spark\.sql\s*\(\s*(?:f?["']{1,3})([\s\S]{0,400}?)["']{1,3}\s*\)""",
                          codigo):
         q = m.group(1)
+        out.append(h("PYS-01", 36, path, ("spark.sql(" + " ".join(q.split())[:60]),
+                     "Spark SQL embebido en string; preferir la API de PySpark.", "OPC"))
         for kw in SQL_KEYWORDS:
             if re.search(rf"\b{kw}\b", q) and not re.search(rf"\b{kw.upper()}\b", q):
                 out.append(h("SQL-01", 64, path, q[:80],
@@ -266,6 +288,8 @@ def main():
         if a["status"] == "removed":
             continue
         if not path.lower().endswith((".ipynb", ".py", ".json")):
+            continue
+        if EXCLUIDOS & {p.lower() for p in path.split("/")}:
             continue
         if not os.path.exists(path):
             continue
