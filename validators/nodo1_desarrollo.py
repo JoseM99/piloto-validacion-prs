@@ -6,7 +6,7 @@ Corre en el runner de GitHub Actions. No usa Databricks ni LLM.
 import json
 import os
 import re
-import sys
+import sys 
 import urllib.request
 
 API = "https://api.github.com"
