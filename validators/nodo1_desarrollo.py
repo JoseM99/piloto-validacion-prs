@@ -92,14 +92,15 @@ def reglas_notebook(path, codigo, markdown):
     limpio = sin_comentarios(codigo)
     en_process = "/process/" in path.lower()
 
-    # NBK-01 cabecera
-    cabecera = (markdown or "") + "\n" + codigo[:1500]
+# NBK-01 cabecera
+    bloque = re.search(r"(?:^[ \t]*#.*\n){3,}", codigo[:1200], re.M)
+    cabecera = (markdown or "") + "\n" + (bloque.group(0) if bloque else "")
     faltan = [k for k, pat in [
-        ("objetivo", r"objetivo|proyecto"),
-        ("version", r"versi[oó]n|version"),
-        ("desarrollador", r"desarrollador|autor"),
-        ("fecha", r"fecha"),
-    ] if not re.search(pat, cabecera, re.I)]
+        ("objetivo", r"^\s*#?\s*(objetivo|proyecto)\b"),
+        ("version", r"^\s*#?\s*versi[oó]n?\b"),
+        ("desarrollador", r"^\s*#?\s*(desarrollador|autor)\b"),
+        ("fecha", r"^\s*#?\s*fecha\b"),
+    ] if not re.search(pat, cabecera, re.I | re.M)]
     if faltan:
         out.append(h("NBK-01", 27, path, cabecera[:120],
                      "Cabecera incompleta, faltan: " + ", ".join(faltan)))
