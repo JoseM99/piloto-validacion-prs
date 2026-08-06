@@ -6,7 +6,7 @@ fuentes:
   - "Documento de Estándares de Desarrollo Lakehouse — Tribu de Datos / COE Data & Analytics (v001, 15/12/2025)"
 description: Estándares de DESARROLLO del Lakehouse de MiBanco — nomenclatura de Azure Data Factory, taxonomía de workspace, estructura de notebooks Databricks, Python, PySpark, performance, logging, SQL y buenas prácticas Lakehouse. Úsala siempre que revises un Pull Request que toque notebooks .ipynb, archivos .py, .sql o definiciones de ADF del ecosistema Lakehouse. NO cubre modelamiento de datos (catálogos, DDL, campos, tags, DAC) — para eso usa mibanco.lakehouse-modelamiento; ni el gobierno del PR (rama, asunto, descripción) — para eso usa mibanco.pr-gobierno.
 ---
-
+s
 # Estándares de Desarrollo Lakehouse — MiBanco
 
 Cubre 37 de las 76 validaciones del Checklist v2 del CoE. Cada regla lleva
