@@ -6,8 +6,11 @@ on:
     paths:
       - '**.ipynb'
       - '**.py'
-      - '**/pipelines/**.json'
-      - '**/datasets/**.json'
+      - '**.sql'
+      - '**/workflows/**.json'
+      - '**/pipeline/**.json'
+      - '**/dataset/**.json'
+      - 'config/catalogo_reglas.json'
 
 permissions:
   contents: read
@@ -46,7 +49,7 @@ jobs:
         run: |
           set -uo pipefail
           HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
-          HALL=$(jq -c '[.hallazgos[] | {regla_id}]' veredicto_desarrollo.json)
+          HALL=$(jq -c '[.hallazgos[] | {codigo}]' veredicto_desarrollo.json)
 
           RUN_ID=$(curl -sS -X POST "$HOST/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
@@ -84,31 +87,75 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -uo pipefail
+
+          if [ ! -s veredicto_desarrollo.json ]; then
+            echo "No hay veredicto. El validador no llego a ejecutarse."
+            exit 0
+          fi
+
           ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json)
-          TOTAL=$(jq '.hallazgos | length' veredicto_desarrollo.json)
+          CATALOGO=$(jq -r '.catalogo' veredicto_desarrollo.json)
+          CHECKLIST=$(jq -r '.checklist' veredicto_desarrollo.json)
           ARCHIVOS=$(jq '.archivos_evaluados | length' veredicto_desarrollo.json)
+          OBL=$(jq '[.hallazgos[] | select(.criticidad=="OBL")] | length' veredicto_desarrollo.json)
+          OPC=$(jq '[.hallazgos[] | select(.criticidad=="OPC")] | length' veredicto_desarrollo.json)
           FECHA=$(TZ='America/Lima' date +"%d/%m/%Y %H:%M")
 
           {
             echo "$MARCA"
-            echo "### Desarrollo Lakehouse: $ESTADO"
+            if [ "$ESTADO" = "APROBADO" ]; then
+              echo "### Desarrollo Lakehouse: APROBADO"
+            else
+              echo "### Desarrollo Lakehouse: RECHAZADO"
+            fi
             echo ""
-            echo "Skill: \`$(jq -r '.skill' veredicto_desarrollo.json)\` · archivos evaluados: $ARCHIVOS · hallazgos: $TOTAL"
+            echo "Checklist \`$CHECKLIST\` · catalogo \`$CATALOGO\` · archivos evaluados: $ARCHIVOS"
+            echo ""
+            echo "| | Cantidad |"
+            echo "| --- | --- |"
+            echo "| Obligatorios (impiden la integracion) | $OBL |"
+            echo "| Opcionales (no bloquean) | $OPC |"
             echo ""
 
-            if [ "$TOTAL" -eq 0 ]; then
-              echo "Sin hallazgos deterministas."
-            else
+            if [ "$OBL" -gt 0 ]; then
+              echo "#### Debes corregir antes de continuar"
+              echo ""
               jq -r --argjson tope "$TOPE_HALLAZGOS" '
-                .hallazgos
+                [.hallazgos[] | select(.criticidad=="OBL")]
                 | group_by(.archivo)
                 | map({archivo: .[0].archivo, items: .})
                 | .[]
                 | "**\(.archivo)**\n" +
-                  (.items[:$tope] | map("- `\(.regla_id)` · \(.criticidad) — \(.explicacion)  \n  `\(.evidencia)`") | join("\n")) +
+                  (.items[:$tope]
+                   | map("- **`\(.codigo)`**" +
+                         (if .linea then " · linea \(.linea)" else "" end) +
+                         "  \n  \(.mensaje)  \n  _\(.correccion)_" +
+                         (if (.evidencia // "") != "" then "  \n  `\(.evidencia)`" else "" end))
+                   | join("\n")) +
                   (if (.items | length) > $tope
                    then "\n- _… y \(.items | length - $tope) hallazgo(s) mas en el log del check._"
                    else "" end) + "\n"' veredicto_desarrollo.json
+            fi
+
+            if [ "$OPC" -gt 0 ]; then
+              echo ""
+              echo "<details><summary>Recomendaciones ($OPC · no bloquean el pase)</summary>"
+              echo ""
+              jq -r '
+                [.hallazgos[] | select(.criticidad=="OPC")]
+                | group_by(.archivo)
+                | map({archivo: .[0].archivo, items: .})
+                | .[]
+                | "**\(.archivo)**\n" +
+                  (.items | map("- `\(.codigo)`" +
+                                (if .linea then " · linea \(.linea)" else "" end) +
+                                " — \(.mensaje)") | join("\n")) + "\n"' veredicto_desarrollo.json
+              echo ""
+              echo "</details>"
+            fi
+
+            if [ "$OBL" -eq 0 ] && [ "$OPC" -eq 0 ]; then
+              echo "Sin hallazgos deterministas."
             fi
 
             if [ -s ia.json ]; then
@@ -116,15 +163,17 @@ jobs:
               echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
               echo ""
               jq -r 'if (.hallazgos|length) > 0
-                     then (.hallazgos[] | "- `\(.regla_id)` · \(.confianza // "?") — \(.explicacion)  \n  `\((.evidencia // "") | gsub("[\\n\\r]+"; " ") | .[0:120])`  \n  _\(.archivo)_")
+                     then (.hallazgos[] | "- `\(.codigo // .regla_id)` — \(.explicacion)  \n  `\((.evidencia // "") | gsub("[\\n\\r]+"; " ") | .[0:120])`  \n  _\(.archivo)_")
                      else "- Sin observaciones adicionales." end' ia.json
               echo ""
               echo "</details>"
-            elif [ "${{ steps.nodo1.outcome }}" != "success" ]; then
+            elif [ "$OBL" -gt 0 ]; then
               echo ""
               echo "_La revision con IA se omite mientras existan hallazgos obligatorios._"
             fi
 
+            echo ""
+            echo "<sub>Cada codigo corresponde a una validacion del Checklist $CHECKLIST del CoE Data & Analytics.</sub>"
             echo ""
             echo "<sub>Actualizado: $FECHA · [run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>"
           } > comentario.md
@@ -143,6 +192,10 @@ jobs:
       - name: Estado final del check
         if: always()
         run: |
-          ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json 2>/dev/null || echo "ERROR")
+          if [ ! -s veredicto_desarrollo.json ]; then
+            echo "El validador no genero veredicto. Se considera no conforme."
+            exit 1
+          fi
+          ESTADO=$(jq -r '.estado_global' veredicto_desarrollo.json)
           echo "Veredicto Nodo 1: $ESTADO"
           [ "$ESTADO" = "APROBADO" ] || exit 1
