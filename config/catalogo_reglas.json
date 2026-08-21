@@ -1,0 +1,702 @@
+{
+  "version": "3.0.0",
+  "checklist": "v4",
+  "_descripcion": "Catalogo unico de reglas del validador. Cada entrada declara el codigo del checklist que la sustenta, su criticidad y el texto de correccion. Editar aqui, nunca en el codigo.",
+  "_leyenda": {
+    "codigo": "Identificador de la validacion en el Checklist v4. Es el que se publica al desarrollador.",
+    "criticidad": "OBL bloquea la integracion. OPC informa sin bloquear. La fija el checklist.",
+    "tipo_v4": "Tipo de analisis que declara el checklist.",
+    "tipo_aplicado": "Capa en la que se resuelve realmente. Cuando difiere de tipo_v4 la diferencia queda registrada en discrepancias.",
+    "estado": "activa | suspendida | retirada"
+  },
+  "reglas": {
+    "TAX-01": {
+      "codigo": "ADB-WS-05",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El notebook no esta bajo la ruta taxonomica esperada.",
+      "correccion": "Ubica el notebook siguiendo Fuente/Origen/Concepto/Proceso/Tipo."
+    },
+    "TAX-02": {
+      "codigo": "ADB-WS-05",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "La fuente de la ruta taxonomica no es valida.",
+      "correccion": "Usa una de las fuentes permitidas: Data, Core, Satelites, Apps, Dataentrys."
+    },
+    "TAX-03": {
+      "codigo": "ADB-WS-05",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El tipo de la ruta taxonomica no es valido.",
+      "correccion": "Usa uno de los tipos permitidos: Process, Config, DDL, DML, Metadata, Utils."
+    },
+    "NBK-01": {
+      "codigo": "ADB-NB-01",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "La cabecera del notebook esta incompleta.",
+      "correccion": "Completa el bloque inicial con objetivo, version, desarrollador, fecha, tabla fuente y tabla destino."
+    },
+    "NBK-02": {
+      "codigo": "ADB-NB-02",
+      "criticidad": "OPC",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Las importaciones no respetan el orden esperado.",
+      "correccion": "Agrupa primero las librerias estandar, luego las de terceros y al final las locales."
+    },
+    "NBK-05": {
+      "codigo": "ADB-NB-03",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Importacion con asterisco.",
+      "correccion": "Importa de forma explicita los nombres que necesitas."
+    },
+    "NBK-03": {
+      "codigo": "ADB-NB-04",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "La funcion no tiene docstring.",
+      "correccion": "Agrega un docstring que describa proposito, parametros y valor de retorno."
+    },
+    "NBK-06": {
+      "codigo": "ADB-NB-05",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Uso de UDF sin sustento documentado.",
+      "correccion": "Documenta que alternativa nativa se evaluo y por que no aplica, o reemplaza la UDF por una funcion nativa."
+    },
+    "NBK-04": {
+      "codigo": "ADB-NB-06",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Los parametros no se reciben por widgets o hay un valor fijo en el codigo.",
+      "correccion": "Recibe todo parametro de entrada mediante dbutils.widgets y evita catalogos fijos en el codigo."
+    },
+    "NBK-09": {
+      "codigo": "ADB-NB-09",
+      "criticidad": "OPC",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Nombre de DataFrame poco descriptivo.",
+      "correccion": "Usa un nombre que refleje el contenido del DataFrame."
+    },
+    "NBK-11": {
+      "codigo": "ADB-NB-11",
+      "criticidad": "OPC",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Linea que supera la longitud maxima recomendada.",
+      "correccion": "Divide la linea para no superar los 120 caracteres."
+    },
+    "NBK-12": {
+      "codigo": "ADB-NB-12",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Consulta SQL embebida en cadena de texto.",
+      "correccion": "Prioriza la interfaz de PySpark sobre spark.sql con la consulta en texto."
+    },
+    "NBK-13": {
+      "codigo": "ADB-NB-13",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Proyeccion con asterisco.",
+      "correccion": "Proyecta unicamente las columnas que el proceso necesita."
+    },
+    "NBK-15": {
+      "codigo": "ADB-NB-15",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Uso de opciones que alteran la estructura en tiempo de escritura.",
+      "correccion": "Retira mergeSchema y overwriteSchema; los cambios de estructura van por una sentencia de definicion."
+    },
+    "NBK-19": {
+      "codigo": "ADB-NB-19",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Operacion que traslada datos al nodo principal.",
+      "correccion": "Evita collect, toPandas y take salvo justificacion tecnica documentada."
+    },
+    "NBK-21": {
+      "codigo": "ADB-NB-21",
+      "criticidad": "OPC",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Falta el registro de inicio, fin o tiempos del proceso.",
+      "correccion": "Registra el inicio, el fin y los tiempos por etapa mediante el mecanismo de logging."
+    },
+    "NBK-22": {
+      "codigo": "ADB-NB-22",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "No se registran los parametros de entrada recibidos.",
+      "correccion": "Registra los parametros obtenidos de los widgets al inicio del proceso."
+    },
+    "NBK-23": {
+      "codigo": "ADB-NB-23",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Las excepciones no se capturan o no se registran.",
+      "correccion": "Captura las excepciones y registralas con nivel de error. No silencies el fallo."
+    },
+    "NBK-24": {
+      "codigo": "ADB-NB-24",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Uso de impresion directa para mensajes del proceso.",
+      "correccion": "Sustituye la impresion por el mecanismo de logging."
+    },
+    "SQL-01": {
+      "codigo": "ADB-SQL-01",
+      "criticidad": "OPC",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Palabra reservada de SQL en minusculas.",
+      "correccion": "Escribe las palabras reservadas en mayusculas."
+    },
+    "DDL-01": {
+      "codigo": "ADB-DDL-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "La tabla no usa un catalogo oficial o no respeta la jerarquia de tres niveles.",
+      "correccion": "Declara la tabla como catalogo.esquema.tabla usando el catalogo de la capa correspondiente."
+    },
+    "DDL-02": {
+      "codigo": "ADB-DDL-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "La tabla no usa un prefijo valido para su capa.",
+      "correccion": "Aplica el prefijo que corresponde a la capa de la tabla."
+    },
+    "DDL-05": {
+      "codigo": "ADB-DDL-02",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan campos tecnicos de auditoria.",
+      "correccion": "Incorpora los campos tecnicos de auditoria que exige la capa."
+    },
+    "DDL-06": {
+      "codigo": "ADB-DDL-06",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan etiquetas obligatorias en la tabla.",
+      "correccion": "Declara las etiquetas obligatorias en las propiedades de la tabla."
+    },
+    "DDL-10": {
+      "codigo": "ADB-DDL-10",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre de la tabla no esta en minusculas separadas por guion bajo.",
+      "correccion": "Renombra la tabla en minusculas y separando las palabras con guion bajo."
+    },
+    "DDL-11": {
+      "codigo": "ADB-DDL-11",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre de la tabla contiene acentos o caracteres no permitidos.",
+      "correccion": "Retira acentos, la letra enye y cualquier caracter especial del nombre."
+    },
+    "DDL-12": {
+      "codigo": "ADB-DDL-12",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre de la tabla supera la longitud maxima.",
+      "correccion": "Acorta el nombre a un maximo de 60 caracteres."
+    },
+    "DDL-13": {
+      "codigo": "ADB-DDL-13",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan comentarios en la tabla o en sus columnas.",
+      "correccion": "Agrega el comentario a nivel de tabla y a nivel de cada columna."
+    },
+    "DDL-14": {
+      "codigo": "ADB-DDL-14",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "No se declara el formato de almacenamiento.",
+      "correccion": "Declara explicitamente el formato Delta en la creacion de la tabla."
+    },
+    "DDL-16": {
+      "codigo": "ADB-DDL-16",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre del campo no esta en minusculas separadas por guion bajo.",
+      "correccion": "Renombra el campo en minusculas y separando las palabras con guion bajo."
+    },
+    "DDL-17": {
+      "codigo": "ADB-DDL-17",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre del campo contiene acentos o caracteres no permitidos.",
+      "correccion": "Retira acentos, la letra enye y cualquier caracter especial del nombre."
+    },
+    "DDL-18": {
+      "codigo": "ADB-DDL-18",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre del campo supera la longitud maxima.",
+      "correccion": "Acorta el nombre a un maximo de 40 caracteres."
+    },
+    "DDL-19": {
+      "codigo": "ADB-DDL-19",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El campo no usa un prefijo acorde a su naturaleza o su tipo no corresponde.",
+      "correccion": "Anteponal el prefijo que corresponde a la naturaleza del dato y usa el tipo indicado para importes y valores."
+    },
+    "DDL-20": {
+      "codigo": "ADB-DDL-20",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Hay campos criticos sin su etiqueta de columna.",
+      "correccion": "Declara la etiqueta de columna que acompana al sufijo de dato critico."
+    },
+    "LH-01": {
+      "codigo": "ADB-LH-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Formato de escritura no permitido para datos persistentes.",
+      "correccion": "Escribe en Delta o Parquet. Los formatos de texto solo aplican a intercambio."
+    },
+    "LH-02": {
+      "codigo": "ADB-LH-02",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Campo de fecha declarado como texto.",
+      "correccion": "Declara los campos de fecha con un tipo nativo de fecha o marca de tiempo."
+    },
+    "WF-01": {
+      "codigo": "ADB-WF-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre del flujo programado no sigue la estructura esperada.",
+      "correccion": "Nombra el flujo con el prefijo, el proyecto y la descripcion, en minusculas y separados por guion bajo."
+    },
+    "WF-02": {
+      "codigo": "ADB-WF-02",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "suspendida",
+      "mensaje": "La abreviatura de proyecto no esta en la lista acordada.",
+      "correccion": "Usa una abreviatura de proyecto de la lista acordada por el equipo.",
+      "_motivo_suspension": "La lista de abreviaturas no esta cerrada. Los ejemplos del checklist no coinciden con la lista indicada verbalmente.",
+      "_responsable": "Area dueña del estandar"
+    },
+    "WF-03": {
+      "codigo": "ADB-WF-03",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan etiquetas obligatorias del flujo programado o alguna tiene un valor no valido.",
+      "correccion": "Declara todas las etiquetas obligatorias y usa un valor permitido en cada una."
+    },
+    "WF-04": {
+      "codigo": "ADB-WF-04",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El archivo del flujo programado no esta en la carpeta de despliegue.",
+      "correccion": "Ubica el archivo en la carpeta de despliegue centralizado."
+    },
+    "WF-05": {
+      "codigo": "ADB-WF-05",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Operacion atomica declarada fuera del ejecutor centralizado.",
+      "correccion": "Canaliza las operaciones atomicas por el ejecutor centralizado."
+    },
+    "WS-01": {
+      "codigo": "ADB-WS-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El macroproceso no esta organizado como una carpeta autocontenida.",
+      "correccion": "Organiza el repositorio por dominio de negocio, con un macroproceso por carpeta.",
+      "_alcance": "Se verifica la existencia de la carpeta del macroproceso. Distinguir dominio de negocio de capa tecnica no es verificable por condicion."
+    },
+    "WS-02": {
+      "codigo": "ADB-WS-02",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan carpetas transversales o su contenido minimo.",
+      "correccion": "Crea las carpetas transversales de despliegue y de recursos compartidos con su contenido minimo."
+    },
+    "WS-03": {
+      "codigo": "ADB-WS-03",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El macroproceso no contiene todas las carpetas exigidas.",
+      "correccion": "Crea las seis carpetas del macroproceso, incluida la de migraciones dentro de definiciones."
+    },
+    "WS-04": {
+      "codigo": "ADB-WS-04",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre del archivo no lleva el prefijo que exige su carpeta.",
+      "correccion": "Renombra el archivo con el prefijo que corresponde al tipo de artefacto."
+    },
+    "ADL-01": {
+      "codigo": "ADL-DDL-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Ruta de almacenamiento de la zona de intercambio fuera del estandar.",
+      "correccion": "Usa la ruta estandar de la zona de intercambio con su sistema y proyecto."
+    },
+    "ADL-02": {
+      "codigo": "ADL-DDL-02",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Ruta de almacenamiento de la capa cruda fuera del estandar.",
+      "correccion": "Usa la ruta estandar de la capa cruda."
+    },
+    "ADL-03": {
+      "codigo": "ADL-DDL-03",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Ruta de almacenamiento de la capa estandarizada fuera del estandar.",
+      "correccion": "Usa la ruta estandar de la capa estandarizada."
+    },
+    "ADL-04": {
+      "codigo": "ADL-DDL-04",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Ruta de almacenamiento de la capa de publicacion fuera del estandar.",
+      "correccion": "Usa la ruta estandar de la capa de publicacion."
+    },
+    "ADF-PIP-01": {
+      "codigo": "ADF-PIP-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El pipeline no esta en la carpeta estandar.",
+      "correccion": "Mueve el pipeline a la carpeta que corresponde a su funcionalidad."
+    },
+    "ADF-PIP-02": {
+      "codigo": "ADF-PIP-02",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "parcial",
+      "mensaje": "El nombre del pipeline no sigue la estructura esperada.",
+      "correccion": "Nombra el pipeline con su funcionalidad, aplicacion y tipo de carga.",
+      "_alcance": "El ultimo segmento no se evalua mientras su catalogo no este definido."
+    },
+    "ADF-DS-01": {
+      "codigo": "ADF-DS-01",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "parcial",
+      "mensaje": "El dataset no esta en una carpeta estandar.",
+      "correccion": "Mueve el dataset a una de las carpetas estandar.",
+      "_alcance": "El catalogo de carpetas solo recoge los ejemplos publicados en el checklist."
+    },
+    "ADF-DS-02": {
+      "codigo": "ADF-DS-02",
+      "criticidad": "OBL",
+      "tipo_v4": "Determinista",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El nombre del dataset no sigue la estructura esperada.",
+      "correccion": "Nombra el dataset con su tipo, aplicacion y conexion de entrada o salida."
+    },
+    "FMT-01": {
+      "codigo": null,
+      "criticidad": "OBL",
+      "tipo_v4": null,
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El archivo no pudo analizarse.",
+      "correccion": "Revisa el formato del archivo: comas colgantes, comillas sin cerrar o estructura invalida.",
+      "_nota": "Control tecnico del validador. No corresponde a una validacion del checklist."
+    }
+  },
+  "listas": {
+    "fuentes_taxonomia": [
+      "data",
+      "core",
+      "satelites",
+      "apps",
+      "dataentrys"
+    ],
+    "tipos_taxonomia": [
+      "process",
+      "config",
+      "ddl",
+      "dml",
+      "metadata",
+      "utils"
+    ],
+    "catalogos": [
+      "mb_bronze_",
+      "mb_silver_",
+      "mb_gold_"
+    ],
+    "prefijos_tabla": {
+      "bronze": [
+        "gt_",
+        "et_",
+        "de_"
+      ],
+      "silver": [
+        "m_",
+        "h_",
+        "p_"
+      ],
+      "gold": [
+        "fct_",
+        "dim_",
+        "tmp_",
+        "t"
+      ]
+    },
+    "prefijos_campo": [
+      "cod",
+      "des",
+      "fec",
+      "hor",
+      "flg",
+      "nom",
+      "ape",
+      "nro",
+      "ctd",
+      "est",
+      "tip",
+      "txt",
+      "val",
+      "mto"
+    ],
+    "tags_tabla": [
+      "frecuencia",
+      "naturaleza",
+      "tipo_tabla",
+      "owner",
+      "dac"
+    ],
+    "tags_workflow": [
+      "area",
+      "project",
+      "solution",
+      "product_owner",
+      "business_impact",
+      "cost_center",
+      "schedule"
+    ],
+    "impacto_valido": [
+      "critical",
+      "high",
+      "medium",
+      "low"
+    ],
+    "abreviaturas_proyecto": [],
+    "prefijos_artefacto": {
+      "ddl": [
+        "ddl_"
+      ],
+      "process": [
+        "nb_",
+        "nb_export_"
+      ],
+      "metadata": [
+        "mtdt_"
+      ],
+      "config": [
+        "config_"
+      ]
+    },
+    "carpetas_macroproceso": [
+      "config",
+      "ddl",
+      "dml",
+      "metadata",
+      "process",
+      "utils"
+    ],
+    "carpetas_transversales": {
+      "deploy": [
+        "workflows"
+      ],
+      "shared": [
+        "config",
+        "utils"
+      ]
+    },
+    "rutas_dataset": [
+      "Azure/Storage",
+      "BaseDatos/Oracle"
+    ],
+    "carpetas_pipeline": [
+      "Master",
+      "Load Batch",
+      "Load Stream"
+    ],
+    "formatos_persistencia": [
+      "delta",
+      "parquet"
+    ],
+    "ejecutor_centralizado": "wf_dataplatform_notebook_executor",
+    "desplegador_workflows": "wf_dataplatform_workflows_deployer",
+    "rutas_almacenamiento": {
+      "bridge": "^/[^/]+/MB_PERU/(IN|OUT)/[^/]+",
+      "bronze": "^abfss://bronze@[a-z0-9]+\\.dfs\\.core\\.windows\\.net/",
+      "silver": "^abfss://silver@[a-z0-9]+\\.dfs\\.core\\.windows\\.net/",
+      "gold": "^abfss://gold@[a-z0-9]+\\.dfs\\.core\\.windows\\.net/"
+    }
+  },
+  "limites": {
+    "linea": 120,
+    "nombre_tabla": 60,
+    "nombre_campo": 40,
+    "nombre_workflow": 70,
+    "hallazgos_por_archivo": 20
+  },
+  "opciones": {
+    "carpetas_excluidas": [
+      "validators",
+      "tests",
+      ".github",
+      "skills",
+      "experimentos",
+      "docs",
+      "config"
+    ],
+    "extensiones": [
+      ".ipynb",
+      ".py",
+      ".sql",
+      ".json"
+    ]
+  },
+  "reglas_retiradas": [
+    {
+      "id": "PY-01",
+      "motivo": "Exigia prefijos de funcion y nombres de variable en un formato que el Checklist v4 no contempla. Bloqueaba sin sustento.",
+      "fecha": "2026-08-21"
+    }
+  ],
+  "discrepancias_con_el_checklist": {
+    "_descripcion": "Validaciones que el Checklist v4 clasifica como Hibrido o LLM y que este validador resuelve por condicion exacta. Se registran para que el area dueña del estandar decida si actualiza la clasificacion.",
+    "_sustento": "Cada una esta cubierta por un caso de prueba que la incumple y otro que la cumple, con deteccion verificada.",
+    "codigos": [
+      "ADB-NB-01",
+      "ADB-NB-02",
+      "ADB-NB-03",
+      "ADB-NB-04",
+      "ADB-NB-05",
+      "ADB-NB-06",
+      "ADB-NB-09",
+      "ADB-NB-12",
+      "ADB-NB-13",
+      "ADB-NB-15",
+      "ADB-NB-19",
+      "ADB-NB-23",
+      "ADB-DDL-01",
+      "ADB-DDL-02",
+      "ADB-DDL-06",
+      "ADB-DDL-11",
+      "ADB-DDL-12",
+      "ADB-DDL-13",
+      "ADB-DDL-16",
+      "ADB-DDL-17",
+      "ADB-DDL-18",
+      "ADB-DDL-19",
+      "ADB-DDL-20",
+      "ADB-LH-01",
+      "ADB-LH-02",
+      "ADB-WF-01",
+      "ADB-WF-03"
+    ]
+  }
+}
