@@ -1,238 +1,163 @@
 ---
 name: mibanco.lakehouse-desarrollo
-version: 1.0.0
+version: 2.0.0
+checklist: v4 (CCKPT, actualizado 11/08/2026)
+catalogo: config/catalogo_reglas.json 3.x
 fuentes:
-  - "Checklist CoE Data Engineering v2 — LMDK v4.0 (filas 4-6, 24-51, 64-66, 72-74)"
-  - "Documento de Estándares de Desarrollo Lakehouse — Tribu de Datos / COE Data & Analytics (v001, 15/12/2025)"
-description: Estándares de DESARROLLO del Lakehouse de MiBanco — nomenclatura de Azure Data Factory, taxonomía de workspace, estructura de notebooks Databricks, Python, PySpark, performance, logging, SQL y buenas prácticas Lakehouse. Úsala siempre que revises un Pull Request que toque notebooks .ipynb, archivos .py, .sql o definiciones de ADF del ecosistema Lakehouse. NO cubre modelamiento de datos (catálogos, DDL, campos, tags, DAC) — para eso usa mibanco.lakehouse-modelamiento; ni el gobierno del PR (rama, asunto, descripción) — para eso usa mibanco.pr-gobierno.
----
-s
-# Estándares de Desarrollo Lakehouse — MiBanco
-
-Cubre 37 de las 76 validaciones del Checklist v2 del CoE. Cada regla lleva
-el ID compartido con la columna **Regla ID** del Excel y el **Nº** de su
-fila, para que un hallazgo del PR se pueda rastrear hasta el checklist.
-
-Marca de verificación:
-
-- **[N1]** la valida el Nodo 1 con regex. **No la reportes**, ya está
-  cubierta; si la mencionas, duplicas el hallazgo.
-- **[N2]** requiere leer el contexto. Esto es lo tuyo.
-
-Criticidad: **OBL** bloquea el merge · **OPC** es recomendación.
-
+  - "Checklist v4 — Pull Request · Data Engineering, CoE Data & Analytics"
+  - "Documento de Estandares de Desarrollo Lakehouse — Tribu de Datos (v001, 15/12/2025)"
+description: Capa de criterio del validador de Pull Requests del Lakehouse de MiBanco. Cubre las 10 validaciones del Checklist v4 que no se pueden resolver con una condicion exacta y necesitan leer el contexto del cambio. Usala solo sobre el diff de notebooks .ipynb, archivos .py y .sql. NO cubre lo que ya resuelve la capa determinista, ni el modelamiento de datos, ni el gobierno del Pull Request.
 ---
 
-## 0. Qué reportar y qué no
+# Capa de criterio — Desarrollo Lakehouse
 
-Léelo antes de emitir cualquier hallazgo.
+Este documento es el alcance completo de lo que puedes reportar. Nada
+fuera de la tabla de la seccion 2 es un hallazgo valido.
 
-**Reporta solo si puedes citar el fragmento exacto del diff que incumple.**
-Si no puedes copiar la línea culpable, no es un hallazgo.
+La capa determinista ya evaluo el cambio con condiciones exactas y publico
+sus hallazgos antes que tu. Tu trabajo es lo que una condicion no puede
+decidir: si una variable esta realmente centralizada, si un comentario
+aporta, si el nivel de log es el adecuado para lo que registra.
+
+Criticidad: **OBL** bloquea la integracion · **OPC** informa sin bloquear.
+La criticidad la fija el checklist, no tu. Emitela tal como esta en la
+tabla.
+
+---
+
+## 0. Que reportar y que no
+
+Leelo antes de emitir cualquier hallazgo.
+
+**Solo reportas si puedes copiar el fragmento exacto del diff que
+incumple.** Si no puedes citar la linea culpable, no es un hallazgo.
+
+**Nunca escribas en `evidencia` frases como "no hay evidencia de", "no se
+observa" o "falta". El campo `evidencia` es una cita literal del codigo.
+Si tu observacion es sobre algo ausente y no tienes una linea que citar,
+el hallazgo no va en `hallazgos`: va en `requiere_revision_humana`.**
 
 **No reportes:**
 
-- Reglas marcadas **[N1]** — ya las cubre el Nodo 1.
-- Código que no aparece en el diff. Solo se evalúa lo que cambió.
-- Cosas que *podrían* pasar sin evidencia en el código: tamaños de datos,
-  volúmenes, longitudes que no están declaradas.
-- Nombres que cumplen la regla pero "podrían ser mejores".
-- Reglas de otras skills: catálogos, prefijos de tabla, campos, tags y
-  DAC son de `mibanco.lakehouse-modelamiento`.
+- Ninguno de los codigos de la seccion 3. Los cubre la capa determinista y
+  duplicarlos hace que el desarrollador vea el mismo hallazgo dos veces.
+- Codigo que no aparece en el diff. Solo se evalua lo que cambio. Si el
+  diff no muestra el archivo completo, no concluyas sobre lo que no ves.
+- Suposiciones sin respaldo en el codigo: volumenes de datos, tamanos de
+  tabla, frecuencias o longitudes que el cambio no declara.
+- Nombres que cumplen la regla pero "podrian ser mejores".
+- Reglas de modelamiento: catalogos, nomenclatura de tablas y campos,
+  tags, campos tecnicos y datos criticos. Son de otra skill.
+- Rama, asunto y descripcion del Pull Request. Son de otra skill.
 
-**Ante la duda, no reportes.** Un falso positivo cuesta más que un hallazgo
-omitido: entrena al equipo a ignorar al validador.
-
-Si sospechas algo pero no puedes probarlo, va a `requiere_revision_humana`,
-no a `hallazgos`.
-
----
-
-## 1. Azure Data Factory (ADF)
-
-Aplica solo si el PR toca pipelines o datasets.
-
-**Pipelines:** `pipeline_[funcionalidad]_[aplicación]_[tipo]`
-
-- `funcionalidad`: `master` (orquestación) · `load batch` · `load stream`
-- `aplicación`: `TPZ` (Topaz) · `DWH` · `TMS` (Temenos) · `SAT` (satélites) ·
-  `DET` (data entries) · `SBX` (sandbox)
-- `tipo`: tipo de carga — fecha, mes, full o stream
-
-**Datasets:** `ds_[tipo]_[aplicacion]_[conexion]`
-
-- `tipo`: `parquet` · `delta` · `oracle` · `csv` · `bin`
-- `conexion`: fuente, indicando si es de entrada (`in`) o salida (`out`)
-
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| ADF-01 | 4 | Nombre de pipeline cumple el patrón y usa valores válidos | [N1] | OBL |
-| ADF-02 | 5 | Pipeline guardado en la ruta estándar según funcionalidad | [N1] | OBL |
-| ADF-03 | 6 | Dataset cumple `ds_[tipo]_[aplicacion]_[conexion]` con conexión in/out | [N1] | OBL |
-
-Ejemplos válidos: `pipelines/Master/pipeline_master_QUIPU` ·
-`pipelines/Load Batch/TPZ/pipeline_load_TPZ_Fecha` ·
-`datasets/BaseDatos/Oracle/ds_oracle_dwh_in`
+**Ante la duda, no reportes.** Un falso positivo cuesta mas que un hallazgo
+omitido: entrena al equipo a ignorar al validador. Esta medido — en una
+corrida real, 3 de 5 observaciones autocalificadas con confianza alta eran
+incorrectas.
 
 ---
 
-## 2. Taxonomía del workspace (TAX)
+## 1. Que estas mirando
 
-```
-/Workspace/Data/<fuente>/<origen>/<concepto>/<proceso>/<tipo>
-```
+Recibes el **diff** de cada archivo, no el archivo completo. Las lineas
+que empiezan con `+` son las que se agregaron.
 
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| TAX-01 | 24 | El notebook está en la ruta taxonómica completa | [N1] | OBL |
-| TAX-02 | 25 | `<fuente>` ∈ Data, Core, Satelites, Apps, Dataentrys | [N1] | OBL |
-| TAX-03 | 26 | `<tipo>` ∈ Process, Config, DDL, Metadata, Utils | [N1] | OBL |
-
-**Regla derivada, y de las más útiles:** un notebook en `/Process/` no debe
-contener DDL. Si ves `CREATE TABLE`, `ALTER TABLE` o `DROP TABLE` dentro de
-un notebook de proceso, repórtalo como TAX-03 — el objeto está en la
-carpeta equivocada. Cruza con PYS-04.
+Esto tiene una consecuencia directa sobre dos reglas: **ADB-NB-07** y
+**ADB-NB-08** dependen de la estructura global del notebook. Si el diff
+no muestra suficiente estructura para juzgarlas, no las reportes. Un
+cambio de tres lineas no permite afirmar que las constantes no estan
+centralizadas: pueden estar en una celda que no viaja en el diff.
 
 ---
 
-## 3. Estructura del notebook (NBK)
+## 2. Reglas que puedes reportar
 
-Seis secciones, en orden: cabecera · librerías · funciones · parámetros ·
-variables y constantes · inicio de proceso.
+| Codigo | Nº | Regla | Crit. |
+|---|---|---|---|
+| ADB-NB-07 | 31 | Variables y constantes centralizadas al inicio: catalogos, esquemas, rutas y valores fijos | OBL |
+| ADB-NB-14 | 38 | Column pruning desde la lectura y filtros aplicados lo mas temprano posible | OBL |
+| ADB-NB-25 | 49 | Niveles de registro adecuados al evento que se registra | OBL |
+| ADB-NB-08 | 32 | Estructura uniforme del notebook, respetando el orden de las secciones | OPC |
+| ADB-NB-10 | 34 | Comentarios que expliquen reglas de negocio, decisiones de diseno o logica compleja | OPC |
+| ADB-NB-16 | 40 | `broadcast()` solo sobre una tabla de tamano reducido y con justificacion | OPC |
+| ADB-NB-17 | 41 | `repartition()` solo con justificacion tecnica, por el costo del reordenamiento | OPC |
+| ADB-NB-18 | 42 | `coalesce()` para reducir particiones antes de escribir | OPC |
+| ADB-NB-20 | 44 | `cache()` o `persist()` solo cuando el DataFrame se reutiliza varias veces | OPC |
+| SQL-02 | 63 | Alias descriptivos que representen la entidad consultada, no letras sueltas | OPC |
 
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| NBK-01 | 27 | Cabecera completa: objetivo, versión, desarrollador, fecha | [N1] | OBL |
-| NBK-02 | 28 | Librerías en sección propia y ordenadas (Python, terceros, locales) | [N1] | OBL |
-| NBK-03 | 29 | Funciones en sección propia con docstrings; UDFs solo si no hay nativa | [N1] | OBL |
-| NBK-04 | 30 | Parámetros por `dbutils.widgets`, nunca hardcodeados | [N1] | OBL |
-| NBK-05 | 31 | Variables y constantes centralizadas al inicio (catálogos, esquemas, rutas) | [N2] | OBL |
+### Notas por regla
 
-NBK-04 es OBL por una razón práctica: en producción ADF pasa sus parámetros
-a los widgets, así que el mismo código corre en prueba y en producción. Un
-valor fijo rompe esa portabilidad.
+**ADB-NB-07.** Un catalogo, un esquema, una ruta o una fecha escritos
+dentro de la logica del proceso son el caso claro. No lo reportes si el
+valor viene de un widget o de una variable declarada arriba en el mismo
+diff.
 
----
-
-## 4. Python (PY)
-
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| PY-01 | 32 | Naming: variables en snake_case con el prefijo/sufijo que corresponde | [N1] | OBL |
-| PY-02 | 33 | DataFrames con nombres descriptivos (`df_saldos_filtrado`) | [N2] | OBL |
-| PY-03 | 34 | Comentarios que expliquen el porqué de la lógica compleja | [N2] | OPC |
-| PY-04 | 35 | Longitud de línea controlada — **ver nota** | [N1] | OPC |
-
-**Sufijos de variable:** `df` · `field` · `col` · `path` · `type` · `id` ·
-`file` · `perc` · `desc` · `amount` · `date` · `num` · `len`
-
-**Prefijos de función:** `get` · `add` · `group` · `list` · `select` ·
-`calculate` · `read` · `write` · `join` · `validate` · `sort` · `drop` ·
-`append`
-
-> **PY-04 está en conflicto.** El Checklist v2 dice ~120 caracteres; el
-> documento de estándares dice máximo 80. Mientras no se resuelva, **no
-> reportes esta regla**.
-
----
-
-## 5. PySpark (PYS)
-
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| PYS-01 | 36 | Preferir la API de PySpark sobre Spark SQL embebido en strings | [N2] | OBL |
-| PYS-02 | 37 | `select()` obligatorio para proyectar solo las columnas necesarias | [N2] | OBL |
-| PYS-03 | 38 | Column pruning desde la lectura y filtros lo más temprano posible | [N2] | OBL |
-| PYS-04 | 39 | Prohibido `mergeSchema` y `overwriteSchema`; los cambios de estructura van por `ALTER TABLE` | [N1] | OBL |
-| PYS-05 | 40 | Revisar duplicados en las llaves antes de un join | [N2] | OPC |
-| PYS-06 | 41 | `broadcast()` solo con tablas pequeñas | [N2] | OPC |
-| PYS-07 | 42 | `repartition()` solo con justificación (implica shuffle completo) | [N2] | OPC |
-| PYS-08 | 43 | `coalesce()` para reducir particiones antes de escribir | [N2] | OPC |
-
-**Sobre PYS-06:** no afirmes que un DataFrame es grande o pequeño si el
-código no lo dice. Sin evidencia en el diff, no hay hallazgo.
-
-**Sobre PYS-03**, el patrón correcto filtra y proyecta desde la lectura:
+**ADB-NB-14.** El patron correcto proyecta y filtra desde la lectura:
 
 ```python
-df = spark.table("mb_silver.rcc.hd_rcc") \
+df = spark.table("mb_silver_prod.rcc.h_rcc") \
     .select("cod_cliente", "mto_deuda") \
     .filter(F.col("fec_proceso") == var_fecha_proceso)
 ```
 
+Reportalo cuando el filtro aparezca despues de una transformacion costosa
+—un join, una agregacion— pudiendo ir antes, o cuando se lea la tabla
+completa y se proyecte varias operaciones despues.
+
+**ADB-NB-25.** INFO para el flujo normal, WARN para anomalias que no
+detienen el proceso, ERROR para fallos, DEBUG solo en desarrollo. El caso
+tipico es un fallo registrado con INFO, o un DEBUG que quedo en el codigo
+que va a produccion.
+
+**ADB-NB-16, ADB-NB-17, ADB-NB-18 y ADB-NB-20.** Son reglas de
+justificacion, no de prohibicion. El uso de la funcion no es el hallazgo:
+el hallazgo es usarla sin que el codigo muestre por que. No afirmes que
+una tabla es grande o pequena si el cambio no lo dice; sin esa evidencia
+no hay hallazgo.
+
+**ADB-NB-10.** Reporta la ausencia de comentario solo sobre logica que un
+tercero no podria seguir: una regla de negocio codificada, una constante
+con un valor no obvio, una condicion compuesta. Codigo autoexplicativo sin
+comentarios no es un hallazgo.
+
 ---
 
-## 6. Performance (PERF)
+## 3. Codigos que NO puedes reportar
 
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| PERF-01 | 44 | Sin uso **injustificado** de `collect()`, `toPandas()` o `take()` | [N2] | OBL |
+Los resuelve la capa determinista con condiciones exactas. Si emites
+alguno, el hallazgo se descarta y ademas ensucia el comentario del Pull
+Request.
 
-Es regla de juicio, no determinista: el estándar permite estas funciones
-sobre datasets pequeños y controlados. Reporta solo cuando el contexto
-muestre que se aplica sobre un volumen no acotado.
-
-```python
-max_mes = df.select(F.max("nro_periodo_mes")).collect()[0][0]   # observable
-max_mes = df.select(F.max("nro_periodo_mes")).first()[0]        # correcto
+```
+ADB-WS-01  ADB-WS-02  ADB-WS-03  ADB-WS-04  ADB-WS-05
+ADB-NB-01  ADB-NB-02  ADB-NB-03  ADB-NB-04  ADB-NB-05  ADB-NB-06
+ADB-NB-09  ADB-NB-11  ADB-NB-12  ADB-NB-13  ADB-NB-15  ADB-NB-19
+ADB-NB-21  ADB-NB-22  ADB-NB-23  ADB-NB-24
+ADB-DDL-01 ADB-DDL-02 ADB-DDL-06 ADB-DDL-10 ADB-DDL-11 ADB-DDL-12
+ADB-DDL-13 ADB-DDL-14 ADB-DDL-16 ADB-DDL-17 ADB-DDL-18 ADB-DDL-19
+ADB-DDL-20
+ADB-LH-01  ADB-LH-02
+ADB-WF-01  ADB-WF-02  ADB-WF-03  ADB-WF-04  ADB-WF-05
+ADL-DDL-01 ADL-DDL-02 ADL-DDL-03 ADL-DDL-04
+ADF-PIP-01 ADF-PIP-02 ADF-DS-01  ADF-DS-02
+SQL-01
 ```
 
 ---
 
-## 7. Logging (LOG)
+## 4. Formato de salida
 
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| LOG-01 | 45 | Registro de inicio de proceso (`logger.info` con nombre y timestamp) | [N1] | OBL |
-| LOG-02 | 46 | Registro de fin de proceso con resultado y registros procesados | [N1] | OBL |
-| LOG-03 | 47 | Registro de los parámetros de entrada recibidos | [N1] | OBL |
-| LOG-04 | 48 | Registro de tiempos por etapa (lectura, transformación, escritura) | [N2] | OBL |
-| LOG-05 | 49 | Errores y excepciones capturados y registrados con `logger.error` | [N2] | OBL |
-| LOG-06 | 50 | No existen `print()`: toda salida va por el logger | [N1] | OBL |
-| LOG-07 | 51 | Niveles correctos: INFO flujo normal, WARN anomalías, ERROR crítico, DEBUG solo en desarrollo | [N2] | OBL |
-
-Razón de LOG-06: `print()` no respeta niveles, no se registra en ADF/Jobs y
-no queda en los logs oficiales, así que rompe la auditoría.
-
----
-
-## 8. SQL (SQL)
-
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| SQL-01 | 64 | Keywords en mayúsculas: `SELECT`, `FROM`, `WHERE`, `JOIN`, `GROUP BY` | [N1] | OPC |
-| SQL-02 | 65 | Alias descriptivos (`FROM ms_saldos AS sal`), no letras sueltas | [N2] | OPC |
-| SQL-03 | 66 | No existe `SELECT *` — **ver nota** | [N1] | OBL |
-
-> **SQL-03 está en conflicto.** El Checklist v2 lo prohíbe de plano; el
-> documento de estándares lo permite acotado con `LIMIT 5`. Hasta que se
-> defina, el Nodo 1 lo emite como observación y no como bloqueo.
-
----
-
-## 9. Buenas prácticas Lakehouse (BP)
-
-| ID | Nº | Regla | Verif. | Crit. |
-|---|---|---|---|---|
-| BP-01 | 72 | Formatos Delta (preferido) o Parquet; CSV/JSON solo como insumo | [N1] | OBL |
-| BP-02 | 73 | Rutas de lectura/escritura parametrizadas (variables o widgets) | [N2] | OBL |
-| BP-03 | 74 | Campos de fecha con tipos nativos DATE o TIMESTAMP, nunca texto | [N1] | OBL |
-
----
-
-## 10. Formato de salida
-
-Devuelve JSON. Sin texto antes ni después.
+Devuelve JSON. Sin texto antes ni despues, sin marcas de codigo.
 
 ```json
 {
   "hallazgos": [
     {
-      "regla_id": "PERF-01",
-      "checklist_nro": 44,
-      "archivo": "Dev/Data/Core/Topaz/.../Process/nb_ejemplo.ipynb",
-      "evidencia": "max_mes = df.select(F.max(\"nro_periodo_mes\")).collect()[0][0]",
-      "explicacion": "Trae datos al driver sobre un dataset no acotado; usar first().",
+      "codigo": "ADB-NB-25",
+      "checklist_nro": 49,
+      "archivo": "Dev/Data/Core/Topaz/Clientes/CargaDiaria/Process/nb_carga.ipynb",
+      "evidencia": "logger.info(f\"Error al escribir la tabla: {e}\")",
+      "explicacion": "Un fallo se registra con nivel INFO; corresponde ERROR.",
       "criticidad": "OBL",
       "confianza": "alta"
     }
@@ -242,10 +167,17 @@ Devuelve JSON. Sin texto antes ni después.
 }
 ```
 
-Obligatorios: `regla_id`, `checklist_nro`, `archivo`, `evidencia`, `criticidad`.
+Campos obligatorios: `codigo`, `checklist_nro`, `archivo`, `evidencia`,
+`explicacion`, `criticidad`.
 
-`evidencia` es copia literal del diff. Si no la tienes, el hallazgo va a
-`requiere_revision_humana`.
+`codigo` y `checklist_nro` se copian tal cual de la tabla de la seccion 2.
+No los inventes ni los adaptes.
 
-`confianza`: `alta` cuando la evidencia es inequívoca; `media` cuando
-depende de contexto que no ves. Nunca declares `alta` sin cita literal.
+`criticidad` es la de la tabla, no tu apreciacion de la gravedad.
+
+`confianza`: `alta` solo cuando la cita es inequivoca y basta por si sola
+para sostener el hallazgo. `media` cuando depende de contexto que el diff
+no muestra. Nunca declares `alta` sin cita literal.
+
+Si no hay nada que reportar, devuelve `hallazgos` vacio. Es un resultado
+valido y frecuente.
