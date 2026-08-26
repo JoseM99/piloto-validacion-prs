@@ -1,6 +1,6 @@
 ---
 name: mibanco.lakehouse-desarrollo
-version: 2.1.0
+version: 2.2.0
 checklist: v4 (CCKPT, actualizado 11/08/2026)
 catalogo: config/catalogo_reglas.json 3.1.0
 fuentes:
@@ -41,6 +41,10 @@ emitir, lee tu propia evidencia y preguntate si un tercero que solo vea
 esa linea estaria de acuerdo contigo. Si la linea que citas muestra el
 comportamiento correcto, no hay hallazgo: hay un error tuyo.
 
+**Si al redactar la explicacion te sale una frase que justifica el codigo
+en lugar de senalar un incumplimiento, ese elemento no va en la salida.**
+No lo emitas explicando por que esta bien. Simplemente omitelo.
+
 **Nunca escribas en `evidencia` frases como "no hay evidencia de", "no se
 observa" o "falta". El campo `evidencia` es una cita literal del codigo.
 Si tu observacion es sobre algo ausente y no tienes una linea que citar,
@@ -48,7 +52,7 @@ el hallazgo no va en `hallazgos`: va en `requiere_revision_humana`.**
 
 **No reportes:**
 
-- Ninguno de los codigos de la seccion 4. Los cubre la capa determinista y
+- Ninguno de los codigos de la seccion 3. Los cubre la capa determinista y
   duplicarlos hace que el desarrollador vea el mismo hallazgo dos veces.
 - El mismo incumplimiento bajo un codigo distinto para esquivar esa lista.
   Si la linea que quieres citar es un `print()`, un `mergeSchema`, un
@@ -102,9 +106,8 @@ puede estar en una celda que no viaja en el diff.
 proceso: un catalogo, un esquema, una ruta o una fecha en medio de una
 transformacion. **No lo reportes si:**
 
-- el valor viene de un widget — `dbutils.widgets.get(...)` es el patron
-  correcto, no un incumplimiento;
-- es una constante declarada en mayusculas, que por convencion pertenece
+- el valor viene de un widget;
+- el nombre asignado esta en mayusculas, porque por convencion pertenece
   al bloque centralizado;
 - el valor se compone de otra variable ya declarada;
 - el diff no muestra la seccion de variables del notebook.
@@ -123,14 +126,14 @@ completa y se proyecte varias operaciones despues. Si la linea que citas
 contiene `spark.sql(...)`, el hallazgo no es tuyo.
 
 **ADB-NB-25.** El hallazgo es un evento registrado con el **nivel
-equivocado**: un fallo con INFO, una anomalia con INFO, un DEBUG que quedo
-en codigo que va a produccion. INFO para el flujo normal, WARN para
-anomalias que no detienen el proceso, ERROR para fallos, DEBUG solo en
-desarrollo.
+equivocado**: un fallo o una excepcion registrados con INFO, una anomalia
+registrada con INFO, un DEBUG que quedo en codigo que va a produccion.
+INFO para el flujo normal, WARN para anomalias que no detienen el proceso,
+ERROR para fallos, DEBUG solo en desarrollo.
 
 **La ausencia de un registro no es esta regla**, es ADB-NB-21, que resuelve
-la capa determinista. Si tu evidencia es una llamada a `logger` cuyo nivel
-corresponde al evento, no hay hallazgo.
+la capa determinista. Un registro de flujo normal emitido con INFO cumple
+el estandar y no se reporta.
 
 **ADB-NB-16, ADB-NB-17, ADB-NB-18 y ADB-NB-20.** Son reglas de
 justificacion, no de prohibicion. El uso de la funcion no es el hallazgo:
@@ -145,21 +148,7 @@ comentarios no es un hallazgo.
 
 ---
 
-## 3. Casos reales que NO son hallazgos
-
-Estos salieron de corridas de control sobre codigo que cumple el estandar.
-Los cuatro se emitieron con confianza alta y los cuatro eran incorrectos.
-
-| Evidencia citada | Se reporto como | Por que estaba mal |
-|---|---|---|
-| `var_catalogo = dbutils.widgets.get("catalogo")` | ADB-NB-07 | El parametro viene de un widget: es el patron correcto |
-| `TBL_CLIENTES_SRC = f"{schema}.clientes_stg"` | ADB-NB-07 | Constante en mayusculas derivada de una variable ya declarada |
-| `logger.info("Inicio del proceso ETL_CLIENTES")` | ADB-NB-25 | Es el registro de inicio, con el nivel que corresponde |
-| `## 1. Cabecera` | ADB-NB-08 | Se juzgo la estructura global viendo solo un fragmento |
-
----
-
-## 4. Codigos que NO puedes reportar
+## 3. Codigos que NO puedes reportar
 
 Los resuelve la capa determinista con condiciones exactas. Si emites
 alguno, el hallazgo se descarta y ademas ensucia el comentario del Pull
@@ -182,7 +171,7 @@ SQL-01
 
 ---
 
-## 5. Formato de salida
+## 4. Formato de salida
 
 Devuelve JSON. Sin texto antes ni despues, sin marcas de codigo.
 
@@ -209,6 +198,9 @@ Campos obligatorios: `codigo`, `checklist_nro`, `archivo`, `evidencia`,
 
 `codigo` y `checklist_nro` se copian tal cual de la tabla de la seccion 2.
 No los inventes ni los adaptes.
+
+`explicacion` describe el incumplimiento en una linea. Si no puedes
+redactarla como un incumplimiento, no emitas el elemento.
 
 `criticidad` es la de la tabla, no tu apreciacion de la gravedad.
 
