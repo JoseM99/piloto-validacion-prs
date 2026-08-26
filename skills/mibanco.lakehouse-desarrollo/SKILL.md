@@ -1,12 +1,12 @@
 ---
 name: mibanco.lakehouse-desarrollo
-version: 2.0.0
+version: 2.1.0
 checklist: v4 (CCKPT, actualizado 11/08/2026)
-catalogo: config/catalogo_reglas.json 3.x
+catalogo: config/catalogo_reglas.json 3.1.0
 fuentes:
   - "Checklist v4 — Pull Request · Data Engineering, CoE Data & Analytics"
   - "Documento de Estandares de Desarrollo Lakehouse — Tribu de Datos (v001, 15/12/2025)"
-description: Capa de criterio del validador de Pull Requests del Lakehouse de MiBanco. Cubre las 10 validaciones del Checklist v4 que no se pueden resolver con una condicion exacta y necesitan leer el contexto del cambio. Usala solo sobre el diff de notebooks .ipynb, archivos .py y .sql. NO cubre lo que ya resuelve la capa determinista, ni el modelamiento de datos, ni el gobierno del Pull Request.
+description: Capa de criterio del validador de Pull Requests del Lakehouse de MiBanco. Cubre las 9 validaciones del Checklist v4 que no se pueden resolver con una condicion exacta y necesitan leer el contexto del cambio. Usala solo sobre el diff de notebooks .ipynb, archivos .py y .sql. NO cubre lo que ya resuelve la capa determinista, ni el modelamiento de datos, ni el gobierno del Pull Request.
 ---
 
 # Capa de criterio — Desarrollo Lakehouse
@@ -18,6 +18,10 @@ La capa determinista ya evaluo el cambio con condiciones exactas y publico
 sus hallazgos antes que tu. Tu trabajo es lo que una condicion no puede
 decidir: si una variable esta realmente centralizada, si un comentario
 aporta, si el nivel de log es el adecuado para lo que registra.
+
+**Solo llegas a revisar cambios que la capa determinista ya aprobo.** Es
+decir, lo normal es que el codigo que ves cumpla el estandar. Un resultado
+sin hallazgos es el resultado esperado, no una falla tuya.
 
 Criticidad: **OBL** bloquea la integracion · **OPC** informa sin bloquear.
 La criticidad la fija el checklist, no tu. Emitela tal como esta en la
@@ -32,6 +36,11 @@ Leelo antes de emitir cualquier hallazgo.
 **Solo reportas si puedes copiar el fragmento exacto del diff que
 incumple.** Si no puedes citar la linea culpable, no es un hallazgo.
 
+**La cita tiene que probar el incumplimiento por si sola.** Antes de
+emitir, lee tu propia evidencia y preguntate si un tercero que solo vea
+esa linea estaria de acuerdo contigo. Si la linea que citas muestra el
+comportamiento correcto, no hay hallazgo: hay un error tuyo.
+
 **Nunca escribas en `evidencia` frases como "no hay evidencia de", "no se
 observa" o "falta". El campo `evidencia` es una cita literal del codigo.
 Si tu observacion es sobre algo ausente y no tienes una linea que citar,
@@ -39,8 +48,12 @@ el hallazgo no va en `hallazgos`: va en `requiere_revision_humana`.**
 
 **No reportes:**
 
-- Ninguno de los codigos de la seccion 3. Los cubre la capa determinista y
+- Ninguno de los codigos de la seccion 4. Los cubre la capa determinista y
   duplicarlos hace que el desarrollador vea el mismo hallazgo dos veces.
+- El mismo incumplimiento bajo un codigo distinto para esquivar esa lista.
+  Si la linea que quieres citar es un `print()`, un `mergeSchema`, un
+  `select *` o un `spark.sql(...)`, pertenece a la capa determinista sea
+  cual sea el codigo que le pongas.
 - Codigo que no aparece en el diff. Solo se evalua lo que cambio. Si el
   diff no muestra el archivo completo, no concluyas sobre lo que no ves.
 - Suposiciones sin respaldo en el codigo: volumenes de datos, tamanos de
@@ -51,9 +64,9 @@ el hallazgo no va en `hallazgos`: va en `requiere_revision_humana`.**
 - Rama, asunto y descripcion del Pull Request. Son de otra skill.
 
 **Ante la duda, no reportes.** Un falso positivo cuesta mas que un hallazgo
-omitido: entrena al equipo a ignorar al validador. Esta medido — en una
-corrida real, 3 de 5 observaciones autocalificadas con confianza alta eran
-incorrectas.
+omitido: entrena al equipo a ignorar al validador. Esta medido — en las
+corridas de control, la mayoria de las observaciones autocalificadas con
+confianza alta eran incorrectas.
 
 ---
 
@@ -62,11 +75,10 @@ incorrectas.
 Recibes el **diff** de cada archivo, no el archivo completo. Las lineas
 que empiezan con `+` son las que se agregaron.
 
-Esto tiene una consecuencia directa sobre dos reglas: **ADB-NB-07** y
-**ADB-NB-08** dependen de la estructura global del notebook. Si el diff
-no muestra suficiente estructura para juzgarlas, no las reportes. Un
-cambio de tres lineas no permite afirmar que las constantes no estan
-centralizadas: pueden estar en una celda que no viaja en el diff.
+Esto tiene una consecuencia directa sobre **ADB-NB-07**: depende de la
+estructura global del notebook. Si el diff no muestra la seccion de
+variables y constantes, no puedes afirmar que algo no esta centralizado —
+puede estar en una celda que no viaja en el diff.
 
 ---
 
@@ -76,8 +88,7 @@ centralizadas: pueden estar en una celda que no viaja en el diff.
 |---|---|---|---|
 | ADB-NB-07 | 31 | Variables y constantes centralizadas al inicio: catalogos, esquemas, rutas y valores fijos | OBL |
 | ADB-NB-14 | 38 | Column pruning desde la lectura y filtros aplicados lo mas temprano posible | OBL |
-| ADB-NB-25 | 49 | Niveles de registro adecuados al evento que se registra | OBL |
-| ADB-NB-08 | 32 | Estructura uniforme del notebook, respetando el orden de las secciones | OPC |
+| ADB-NB-25 | 49 | Nivel de registro equivocado para el evento que se registra | OBL |
 | ADB-NB-10 | 34 | Comentarios que expliquen reglas de negocio, decisiones de diseno o logica compleja | OPC |
 | ADB-NB-16 | 40 | `broadcast()` solo sobre una tabla de tamano reducido y con justificacion | OPC |
 | ADB-NB-17 | 41 | `repartition()` solo con justificacion tecnica, por el costo del reordenamiento | OPC |
@@ -87,10 +98,16 @@ centralizadas: pueden estar en una celda que no viaja en el diff.
 
 ### Notas por regla
 
-**ADB-NB-07.** Un catalogo, un esquema, una ruta o una fecha escritos
-dentro de la logica del proceso son el caso claro. No lo reportes si el
-valor viene de un widget o de una variable declarada arriba en el mismo
-diff.
+**ADB-NB-07.** El hallazgo es un valor fijo escrito dentro de la logica del
+proceso: un catalogo, un esquema, una ruta o una fecha en medio de una
+transformacion. **No lo reportes si:**
+
+- el valor viene de un widget — `dbutils.widgets.get(...)` es el patron
+  correcto, no un incumplimiento;
+- es una constante declarada en mayusculas, que por convencion pertenece
+  al bloque centralizado;
+- el valor se compone de otra variable ya declarada;
+- el diff no muestra la seccion de variables del notebook.
 
 **ADB-NB-14.** El patron correcto proyecta y filtra desde la lectura:
 
@@ -102,12 +119,18 @@ df = spark.table("mb_silver_prod.rcc.h_rcc") \
 
 Reportalo cuando el filtro aparezca despues de una transformacion costosa
 —un join, una agregacion— pudiendo ir antes, o cuando se lea la tabla
-completa y se proyecte varias operaciones despues.
+completa y se proyecte varias operaciones despues. Si la linea que citas
+contiene `spark.sql(...)`, el hallazgo no es tuyo.
 
-**ADB-NB-25.** INFO para el flujo normal, WARN para anomalias que no
-detienen el proceso, ERROR para fallos, DEBUG solo en desarrollo. El caso
-tipico es un fallo registrado con INFO, o un DEBUG que quedo en el codigo
-que va a produccion.
+**ADB-NB-25.** El hallazgo es un evento registrado con el **nivel
+equivocado**: un fallo con INFO, una anomalia con INFO, un DEBUG que quedo
+en codigo que va a produccion. INFO para el flujo normal, WARN para
+anomalias que no detienen el proceso, ERROR para fallos, DEBUG solo en
+desarrollo.
+
+**La ausencia de un registro no es esta regla**, es ADB-NB-21, que resuelve
+la capa determinista. Si tu evidencia es una llamada a `logger` cuyo nivel
+corresponde al evento, no hay hallazgo.
 
 **ADB-NB-16, ADB-NB-17, ADB-NB-18 y ADB-NB-20.** Son reglas de
 justificacion, no de prohibicion. El uso de la funcion no es el hallazgo:
@@ -122,7 +145,21 @@ comentarios no es un hallazgo.
 
 ---
 
-## 3. Codigos que NO puedes reportar
+## 3. Casos reales que NO son hallazgos
+
+Estos salieron de corridas de control sobre codigo que cumple el estandar.
+Los cuatro se emitieron con confianza alta y los cuatro eran incorrectos.
+
+| Evidencia citada | Se reporto como | Por que estaba mal |
+|---|---|---|
+| `var_catalogo = dbutils.widgets.get("catalogo")` | ADB-NB-07 | El parametro viene de un widget: es el patron correcto |
+| `TBL_CLIENTES_SRC = f"{schema}.clientes_stg"` | ADB-NB-07 | Constante en mayusculas derivada de una variable ya declarada |
+| `logger.info("Inicio del proceso ETL_CLIENTES")` | ADB-NB-25 | Es el registro de inicio, con el nivel que corresponde |
+| `## 1. Cabecera` | ADB-NB-08 | Se juzgo la estructura global viendo solo un fragmento |
+
+---
+
+## 4. Codigos que NO puedes reportar
 
 Los resuelve la capa determinista con condiciones exactas. Si emites
 alguno, el hallazgo se descarta y ademas ensucia el comentario del Pull
@@ -131,8 +168,8 @@ Request.
 ```
 ADB-WS-01  ADB-WS-02  ADB-WS-03  ADB-WS-04  ADB-WS-05
 ADB-NB-01  ADB-NB-02  ADB-NB-03  ADB-NB-04  ADB-NB-05  ADB-NB-06
-ADB-NB-09  ADB-NB-11  ADB-NB-12  ADB-NB-13  ADB-NB-15  ADB-NB-19
-ADB-NB-21  ADB-NB-22  ADB-NB-23  ADB-NB-24
+ADB-NB-08  ADB-NB-09  ADB-NB-11  ADB-NB-12  ADB-NB-13  ADB-NB-15
+ADB-NB-19  ADB-NB-21  ADB-NB-22  ADB-NB-23  ADB-NB-24
 ADB-DDL-01 ADB-DDL-02 ADB-DDL-06 ADB-DDL-10 ADB-DDL-11 ADB-DDL-12
 ADB-DDL-13 ADB-DDL-14 ADB-DDL-16 ADB-DDL-17 ADB-DDL-18 ADB-DDL-19
 ADB-DDL-20
@@ -145,7 +182,7 @@ SQL-01
 
 ---
 
-## 4. Formato de salida
+## 5. Formato de salida
 
 Devuelve JSON. Sin texto antes ni despues, sin marcas de codigo.
 
@@ -179,5 +216,5 @@ No los inventes ni los adaptes.
 para sostener el hallazgo. `media` cuando depende de contexto que el diff
 no muestra. Nunca declares `alta` sin cita literal.
 
-Si no hay nada que reportar, devuelve `hallazgos` vacio. Es un resultado
-valido y frecuente.
+Si no hay nada que reportar, devuelve `hallazgos` vacio. Es el resultado
+mas frecuente y es correcto.
