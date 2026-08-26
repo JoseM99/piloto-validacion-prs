@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
+  "version": "3.1.0",
   "checklist": "v4",
   "_descripcion": "Catalogo unico de reglas del validador. Cada entrada declara el codigo del checklist que la sustenta, su criticidad y el texto de correccion. Editar aqui, nunca en el codigo.",
   "_leyenda": {
@@ -383,31 +383,34 @@
     },
     "WS-01": {
       "codigo": "ADB-WS-01",
-      "criticidad": "OBL",
+      "criticidad": "OPC",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
       "estado": "activa",
       "mensaje": "El macroproceso no esta organizado como una carpeta autocontenida.",
       "correccion": "Organiza el repositorio por dominio de negocio, con un macroproceso por carpeta.",
-      "_alcance": "Se verifica la existencia de la carpeta del macroproceso. Distinguir dominio de negocio de capa tecnica no es verificable por condicion."
+      "_alcance": "Se verifica la existencia de la carpeta del macroproceso. Distinguir dominio de negocio de capa tecnica no es verificable por condicion.",
+      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado."
     },
     "WS-02": {
       "codigo": "ADB-WS-02",
-      "criticidad": "OBL",
+      "criticidad": "OPC",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
       "estado": "activa",
       "mensaje": "Faltan carpetas transversales o su contenido minimo.",
-      "correccion": "Crea las carpetas transversales de despliegue y de recursos compartidos con su contenido minimo."
+      "correccion": "Crea las carpetas transversales de despliegue y de recursos compartidos con su contenido minimo.",
+      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado."
     },
     "WS-03": {
       "codigo": "ADB-WS-03",
-      "criticidad": "OBL",
+      "criticidad": "OPC",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
       "estado": "activa",
       "mensaje": "El macroproceso no contiene todas las carpetas exigidas.",
-      "correccion": "Crea las seis carpetas del macroproceso, incluida la de migraciones dentro de definiciones."
+      "correccion": "Crea las seis carpetas del macroproceso, incluida la de migraciones dentro de definiciones.",
+      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado."
     },
     "WS-04": {
       "codigo": "ADB-WS-04",
