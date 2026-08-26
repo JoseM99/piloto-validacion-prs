@@ -23,6 +23,7 @@ concurrency:
 env:
   MARCA: "<!-- validador-lakehouse-dev -->"
   TOPE_HALLAZGOS: 20
+  TAREA_SALIDA: consolidar
 
 jobs:
   desarrollo:
@@ -37,9 +38,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python validators/nodo1_desarrollo.py
 
-      - name: Nodo 2 - revision con IA (solo si Nodo 1 aprueba)
+      - name: Nodo 2 - revision con criterio
         id: nodo2
-        if: steps.nodo1.outcome == 'success'
         continue-on-error: true
         env:
           HOST:  ${{ secrets.DATABRICKS_HOST }}
@@ -49,35 +49,69 @@ jobs:
         run: |
           set -uo pipefail
           HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
-          HALL=$(jq -c '[.hallazgos[] | {codigo}]' veredicto_desarrollo.json)
 
           RUN_ID=$(curl -sS -X POST "$HOST/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
             -d "$(jq -n --argjson job_id "$JOBID" --arg repo "$GITHUB_REPOSITORY" \
                    --arg pr "${{ github.event.pull_request.number }}" \
-                   --arg tok "$GH_TOKEN" --arg h "$HALL" \
-                   '{job_id:$job_id, notebook_params:{repo:$repo, pr_number:$pr, gh_token:$tok, hallazgos_nodo1:$h}}')" \
+                   --arg tok "$GH_TOKEN" \
+                   '{job_id:$job_id, notebook_params:{repo:$repo, pr_number:$pr, gh_token:$tok}}')" \
             | jq -r '.run_id // empty')
 
-          if [ -z "$RUN_ID" ]; then echo "No se pudo disparar el Nodo 2"; exit 0; fi
+          if [ -z "$RUN_ID" ]; then
+            echo "No se pudo disparar el Job de Databricks." > ia_motivo.txt
+            echo "No se pudo disparar el Nodo 2"
+            exit 0
+          fi
+          echo "Job disparado: run_id=$RUN_ID"
 
           RESP=""
+          TERMINO="no"
           for i in $(seq 1 60); do
             RESP=$(curl -sS "$HOST/api/2.1/jobs/runs/get?run_id=$RUN_ID" \
               -H "Authorization: Bearer $TOKEN")
             ST=$(echo "$RESP" | jq -r '.status.state // .state.life_cycle_state // "?"')
             echo "[$i] estado=$ST"
-            case "$ST" in TERMINATED|INTERNAL_ERROR|SKIPPED|SUCCESS|FAILED) break ;; esac
+            case "$ST" in
+              TERMINATED|INTERNAL_ERROR|SKIPPED|SUCCESS|FAILED) TERMINO="si"; break ;;
+            esac
             sleep 10
           done
 
-          TRID=$(echo "$RESP" | jq -r '.tasks[0].run_id // empty')
+          if [ "$TERMINO" = "no" ]; then
+            echo "La revision con criterio supero el tiempo de espera de 10 minutos." > ia_motivo.txt
+            echo "Timeout esperando al Job"
+            exit 0
+          fi
+
+          # La salida se toma de la tarea consolidadora POR NOMBRE. Con varias
+          # tareas, tasks[0] es la determinista y no devuelve el veredicto.
+          TRID=$(echo "$RESP" | jq -r --arg k "$TAREA_SALIDA" \
+                   '(.tasks[]? | select(.task_key==$k) | .run_id) // empty' | head -1)
+          if [ -z "$TRID" ]; then
+            TRID=$(echo "$RESP" | jq -r '.tasks[-1].run_id // empty')
+            echo "Tarea '$TAREA_SALIDA' no encontrada. Se usa la ultima tarea del Job."
+          fi
           if [ -z "$TRID" ]; then TRID="$RUN_ID"; fi
+          echo "Leyendo salida de la tarea run_id=$TRID"
 
           curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
-            -H "Authorization: Bearer $TOKEN" | jq -r '.notebook_output.result // empty' > ia.json
+            -H "Authorization: Bearer $TOKEN" | jq -r '.notebook_output.result // empty' > salida.json
 
-          if [ ! -s ia.json ]; then echo "Sin salida del Nodo 2"; rm -f ia.json; exit 0; fi
+          if [ ! -s salida.json ]; then
+            echo "La revision con criterio no devolvio resultado." > ia_motivo.txt
+            echo "Sin salida del Job"
+            rm -f salida.json
+            exit 0
+          fi
+
+          # El consolidador devuelve los dos veredictos. Solo interesa el de criterio.
+          if jq -e 'has("ia")' salida.json > /dev/null; then
+            jq '{hallazgos: .ia, ia_ejecutada: .ia_ejecutada}' salida.json > ia.json
+          else
+            cp salida.json ia.json
+          fi
+          echo "Salida del Nodo 2 recibida"
 
       - name: Publicar comentario unico
         if: always()
@@ -159,17 +193,18 @@ jobs:
             fi
 
             if [ -s ia.json ]; then
+              IA_N=$(jq '.hallazgos | length' ia.json)
               echo ""
-              echo "<details><summary>Revision con IA (referencial, no bloquea)</summary>"
+              echo "<details><summary>Revision con criterio ($IA_N · referencial, no bloquea)</summary>"
               echo ""
               jq -r 'if (.hallazgos|length) > 0
                      then (.hallazgos[] | "- `\(.codigo // .regla_id)` — \(.explicacion)  \n  `\((.evidencia // "") | gsub("[\\n\\r]+"; " ") | .[0:120])`  \n  _\(.archivo)_")
-                     else "- Sin observaciones adicionales." end' ia.json
+                     else "- Sin observaciones adicionales sobre las reglas de criterio." end' ia.json
               echo ""
               echo "</details>"
-            elif [ "$OBL" -gt 0 ]; then
+            elif [ -s ia_motivo.txt ]; then
               echo ""
-              echo "_La revision con IA se omite mientras existan hallazgos obligatorios._"
+              echo "_Revision con criterio no disponible: $(cat ia_motivo.txt)_"
             fi
 
             echo ""
