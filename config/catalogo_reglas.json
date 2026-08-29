@@ -1,5 +1,5 @@
 {
-  "version": "3.1.0",
+  "version": "3.2.0",
   "checklist": "v4",
   "_descripcion": "Catalogo unico de reglas del validador. Cada entrada declara el codigo del checklist que la sustenta, su criticidad y el texto de correccion. Editar aqui, nunca en el codigo.",
   "_leyenda": {
@@ -7,8 +7,14 @@
     "criticidad": "OBL bloquea la integracion. OPC informa sin bloquear. La fija el checklist.",
     "tipo_v4": "Tipo de analisis que declara el checklist.",
     "tipo_aplicado": "Capa en la que se resuelve realmente. Cuando difiere de tipo_v4 la diferencia queda registrada en discrepancias.",
-    "estado": "activa | suspendida | retirada"
+    "estado": "activa | parcial | suspendida | retirada"
   },
+  "_cambios_3_2_0": [
+    "SQL-01 pasa a declarar el codigo SQL-01. El checklist no lo nombra con prefijo de tecnologia.",
+    "WF-01, WF-03, WF-04 y WF-05 pasan a suspendida: el checklist marca las cinco validaciones de workflows como No activo.",
+    "WS-02 pasa a suspendida por el mismo motivo.",
+    "FMT-01 recibe un codigo propio. Antes se publicaba sin identificador."
+  ],
   "reglas": {
     "TAX-01": {
       "codigo": "ADB-WS-05",
@@ -182,13 +188,14 @@
       "correccion": "Sustituye la impresion por el mecanismo de logging."
     },
     "SQL-01": {
-      "codigo": "ADB-SQL-01",
+      "codigo": "SQL-01",
       "criticidad": "OPC",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
       "estado": "activa",
       "mensaje": "Palabra reservada de SQL en minusculas.",
-      "correccion": "Escribe las palabras reservadas en mayusculas."
+      "correccion": "Escribe las palabras reservadas en mayusculas.",
+      "_nota_codigo": "El checklist nombra esta validacion SQL-01, sin prefijo de tecnologia. Hasta 3.1.0 el catalogo publicaba ADB-SQL-01, que no existe en el checklist."
     },
     "DDL-01": {
       "codigo": "ADB-DDL-01",
@@ -305,7 +312,7 @@
       "tipo_aplicado": "Determinista",
       "estado": "activa",
       "mensaje": "El campo no usa un prefijo acorde a su naturaleza o su tipo no corresponde.",
-      "correccion": "Anteponal el prefijo que corresponde a la naturaleza del dato y usa el tipo indicado para importes y valores."
+      "correccion": "Anteponle el prefijo que corresponde a la naturaleza del dato y usa el tipo indicado para importes y valores."
     },
     "DDL-20": {
       "codigo": "ADB-DDL-20",
@@ -339,9 +346,11 @@
       "criticidad": "OBL",
       "tipo_v4": "Hibrido",
       "tipo_aplicado": "Determinista",
-      "estado": "activa",
+      "estado": "suspendida",
       "mensaje": "El nombre del flujo programado no sigue la estructura esperada.",
-      "correccion": "Nombra el flujo con el prefijo, el proyecto y la descripcion, en minusculas y separados por guion bajo."
+      "correccion": "Nombra el flujo con el prefijo, el proyecto y la descripcion, en minusculas y separados por guion bajo.",
+      "_motivo_suspension": "El checklist declara la validacion como No activo. Se reactiva cuando el area dueña la ponga en vigencia.",
+      "_responsable": "Area dueña del estandar"
     },
     "WF-02": {
       "codigo": "ADB-WF-02",
@@ -351,7 +360,7 @@
       "estado": "suspendida",
       "mensaje": "La abreviatura de proyecto no esta en la lista acordada.",
       "correccion": "Usa una abreviatura de proyecto de la lista acordada por el equipo.",
-      "_motivo_suspension": "La lista de abreviaturas no esta cerrada. Los ejemplos del checklist no coinciden con la lista indicada verbalmente.",
+      "_motivo_suspension": "El checklist declara la validacion como No activo y ademas la lista de abreviaturas no esta cerrada. Los ejemplos del checklist no coinciden con la lista indicada verbalmente.",
       "_responsable": "Area dueña del estandar"
     },
     "WF-03": {
@@ -359,27 +368,33 @@
       "criticidad": "OBL",
       "tipo_v4": "Hibrido",
       "tipo_aplicado": "Determinista",
-      "estado": "activa",
+      "estado": "suspendida",
       "mensaje": "Faltan etiquetas obligatorias del flujo programado o alguna tiene un valor no valido.",
-      "correccion": "Declara todas las etiquetas obligatorias y usa un valor permitido en cada una."
+      "correccion": "Declara todas las etiquetas obligatorias y usa un valor permitido en cada una.",
+      "_motivo_suspension": "El checklist declara la validacion como No activo. Se reactiva cuando el area dueña la ponga en vigencia.",
+      "_responsable": "Area dueña del estandar"
     },
     "WF-04": {
       "codigo": "ADB-WF-04",
       "criticidad": "OBL",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
-      "estado": "activa",
+      "estado": "suspendida",
       "mensaje": "El archivo del flujo programado no esta en la carpeta de despliegue.",
-      "correccion": "Ubica el archivo en la carpeta de despliegue centralizado."
+      "correccion": "Ubica el archivo en la carpeta de despliegue centralizado.",
+      "_motivo_suspension": "El checklist declara la validacion como No activo. Se reactiva cuando el area dueña la ponga en vigencia.",
+      "_responsable": "Area dueña del estandar"
     },
     "WF-05": {
       "codigo": "ADB-WF-05",
       "criticidad": "OBL",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
-      "estado": "activa",
+      "estado": "suspendida",
       "mensaje": "Operacion atomica declarada fuera del ejecutor centralizado.",
-      "correccion": "Canaliza las operaciones atomicas por el ejecutor centralizado."
+      "correccion": "Canaliza las operaciones atomicas por el ejecutor centralizado.",
+      "_motivo_suspension": "El checklist declara la validacion como No activo. Se reactiva cuando el area dueña la ponga en vigencia.",
+      "_responsable": "Area dueña del estandar"
     },
     "WS-01": {
       "codigo": "ADB-WS-01",
@@ -390,17 +405,19 @@
       "mensaje": "El macroproceso no esta organizado como una carpeta autocontenida.",
       "correccion": "Organiza el repositorio por dominio de negocio, con un macroproceso por carpeta.",
       "_alcance": "Se verifica la existencia de la carpeta del macroproceso. Distinguir dominio de negocio de capa tecnica no es verificable por condicion.",
-      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado."
+      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado.",
+      "_pendiente": "Falta la definicion de que nivel de la taxonomia corresponde al macroproceso."
     },
     "WS-02": {
       "codigo": "ADB-WS-02",
       "criticidad": "OPC",
       "tipo_v4": "Determinista",
       "tipo_aplicado": "Determinista",
-      "estado": "activa",
+      "estado": "suspendida",
       "mensaje": "Faltan carpetas transversales o su contenido minimo.",
       "correccion": "Crea las carpetas transversales de despliegue y de recursos compartidos con su contenido minimo.",
-      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado."
+      "_motivo_suspension": "El checklist declara la validacion como No activo. Se reactiva cuando el area dueña la ponga en vigencia.",
+      "_responsable": "Area dueña del estandar"
     },
     "WS-03": {
       "codigo": "ADB-WS-03",
@@ -410,7 +427,8 @@
       "estado": "activa",
       "mensaje": "El macroproceso no contiene todas las carpetas exigidas.",
       "correccion": "Crea las seis carpetas del macroproceso, incluida la de migraciones dentro de definiciones.",
-      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado."
+      "_nota_criticidad": "El checklist la declara obligatoria. Se opera como opcional porque evalua el arbol completo del repositorio y no el cambio propuesto, de modo que un repositorio anterior al estandar la incumpliria en cada Pull Request sin que el desarrollador pueda corregirla. Vuelve a obligatoria cuando el repositorio este regularizado.",
+      "_pendiente": "Falta la definicion de que nivel de la taxonomia corresponde al macroproceso."
     },
     "WS-04": {
       "codigo": "ADB-WS-04",
@@ -446,7 +464,8 @@
       "tipo_aplicado": "Determinista",
       "estado": "activa",
       "mensaje": "Ruta de almacenamiento de la capa estandarizada fuera del estandar.",
-      "correccion": "Usa la ruta estandar de la capa estandarizada."
+      "correccion": "Usa la ruta estandar de la capa estandarizada.",
+      "_pendiente": "El checklist tiene dos versiones de ADL-DDL-03 marcadas como activas a la vez. El patron aplicado corresponde a la version vigente."
     },
     "ADL-04": {
       "codigo": "ADL-DDL-04",
@@ -496,7 +515,7 @@
       "correccion": "Nombra el dataset con su tipo, aplicacion y conexion de entrada o salida."
     },
     "FMT-01": {
-      "codigo": null,
+      "codigo": "FMT-01",
       "criticidad": "OBL",
       "tipo_v4": null,
       "tipo_aplicado": "Determinista",
@@ -655,6 +674,7 @@
       "docs",
       "config"
     ],
+    "_nota_carpetas_excluidas": "config queda en la lista hasta que el validador excluya por ruta completa y no por nombre de segmento. Mientras tanto, ningun artefacto ubicado en la carpeta config de un macroproceso llega a evaluarse.",
     "extensiones": [
       ".ipynb",
       ".py",
@@ -669,6 +689,27 @@
       "fecha": "2026-08-21"
     }
   ],
+  "sin_cobertura": {
+    "_descripcion": "Validaciones activas del checklist que ninguna capa evalua todavia. Se declaran aqui para que la brecha sea visible y no se descubra por ausencia.",
+    "codigos": [
+      "ADB-DDL-03",
+      "ADB-DDL-04",
+      "ADB-DDL-05",
+      "ADB-DDL-07",
+      "ADB-DDL-08",
+      "ADB-DDL-09",
+      "ADB-DDL-15",
+      "ADB-DDL-21",
+      "ADB-DE-01",
+      "ADB-DE-02",
+      "ADB-DE-03",
+      "ADB-LH-03",
+      "ADB-LH-04",
+      "ADB-NB-08",
+      "ADL-DE-01",
+      "ADL-DE-02"
+    ]
+  },
   "discrepancias_con_el_checklist": {
     "_descripcion": "Validaciones que el Checklist v4 clasifica como Hibrido o LLM y que este validador resuelve por condicion exacta. Se registran para que el area dueña del estandar decida si actualiza la clasificacion.",
     "_sustento": "Cada una esta cubierta por un caso de prueba que la incumple y otro que la cumple, con deteccion verificada.",
@@ -697,9 +738,7 @@
       "ADB-DDL-19",
       "ADB-DDL-20",
       "ADB-LH-01",
-      "ADB-LH-02",
-      "ADB-WF-01",
-      "ADB-WF-03"
+      "ADB-LH-02"
     ]
   }
 }
