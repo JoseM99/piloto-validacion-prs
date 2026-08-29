@@ -63,21 +63,26 @@ def h(rid, archivo, evidencia, detalle=None, linea=None):
 
 # --------------------------------------------------------------- utilidades
 def extraer_codigo_ipynb(texto):
-    """Devuelve codigo y markdown de un notebook."""
+    """Devuelve codigo, markdown y las celdas SQL con su posicion en el codigo."""
     try:
         nb = json.loads(texto)
     except json.JSONDecodeError:
-        return None, None
-    codigo, markdown = [], []
+        return None, None, None
+
+    codigo, markdown, sql = [], [], []
+    pos = 0
     for celda in nb.get("cells", []):
         fuente = celda.get("source", [])
         if isinstance(fuente, list):
             fuente = "".join(fuente)
         if celda.get("cell_type") == "code":
             codigo.append(fuente)
+            if re.match(r"\s*%sql\b", fuente):
+                sql.append((pos, fuente))
+            pos += len(fuente) + 1   # el salto que agrega el join
         else:
             markdown.append(fuente)
-    return "\n".join(codigo), "\n".join(markdown)
+    return "\n".join(codigo), "\n".join(markdown), sql
 
 
 def sin_comentarios(codigo):
@@ -86,6 +91,19 @@ def sin_comentarios(codigo):
     s = re.sub(r"'''[\s\S]*?'''", "''", s)
     s = re.sub(r"^\s*#.*$", "", s, flags=re.M)
     return s
+
+
+def normalizar_cabecera(texto):
+    """Quita marcas de comentario y separadores para poder buscar las etiquetas.
+
+    Cubre los tres estilos en uso: almohadilla en Python, doble guion en celdas
+    SQL y barras verticales como separador de columnas.
+    """
+    lineas = []
+    for ln in texto.split("\n"):
+        ln = re.sub(r"^\s*(?:#|-{2,})+", "", ln)
+        lineas.append(ln.replace("|", " ").strip())
+    return "\n".join(lineas)
 
 
 def nro_linea(texto, pos):
@@ -117,17 +135,23 @@ def reglas_notebook(path, codigo, markdown):
     limpio = sin_comentarios(codigo)
     en_process = "/process/" in path.lower()
 
-    # ADB-NB-01 · cabecera
+    # ADB-NB-01 · cabecera. Se aceptan los tres estilos: markdown, comentarios
+    # de Python y comentarios de celda SQL.
     if activa("NBK-01"):
-        bloque = re.search(r"(?:^[ \t]*#.*\n){3,}", codigo[:1500], re.M)
-        cabecera = (markdown or "") + "\n" + (bloque.group(0) if bloque else "")
+        crudo = codigo[:3000]
+        bloque_py = re.search(r"(?:^[ \t]*#.*\n){3,}", crudo, re.M)
+        bloque_sql = re.search(r"(?:^[ \t]*-{2,}.*\n){3,}", crudo, re.M)
+        cabecera = normalizar_cabecera(
+            (markdown or "")
+            + "\n" + (bloque_py.group(0) if bloque_py else "")
+            + "\n" + (bloque_sql.group(0) if bloque_sql else ""))
         faltan = [k for k, pat in [
-            ("objetivo", r"^\s*#?\s*(objetivo|proyecto)\b"),
-            ("version", r"^\s*#?\s*versi[oó]n?\b"),
-            ("desarrollador", r"^\s*#?\s*(desarrollador|autor)\b"),
-            ("fecha", r"^\s*#?\s*fecha\b"),
-            ("tabla fuente", r"^\s*#?\s*(tabla\s+fuente|fuente|origen)\b"),
-            ("tabla destino", r"^\s*#?\s*(tabla\s+destino|destino)\b"),
+            ("objetivo", r"^\s*(objetivo|proyecto)\b"),
+            ("version", r"^\s*versi[oó]n?\b"),
+            ("desarrollador", r"^\s*(desarrollador|autor)\b"),
+            ("fecha", r"^\s*fecha\b"),
+            ("tabla fuente", r"^\s*(tabla\s+fuente|fuente|origen)\b"),
+            ("tabla destino", r"^\s*(tabla\s+destino|destino)\b"),
         ] if not re.search(pat, cabecera, re.I | re.M)]
         if faltan:
             out.append(h("NBK-01", path, cabecera[:120],
@@ -316,6 +340,29 @@ def reglas_sql(path, codigo):
 
         if activa("NBK-13") and re.search(r"select\s+\*", q, re.I):
             out.append(h("NBK-13", path, q[:80], None, ln))
+    return out
+
+
+def reglas_sql_celdas(path, celdas, codigo):
+    """SQL-01 y ADB-NB-13 sobre celdas SQL del notebook.
+
+    ADB-NB-12 no aplica: una celda SQL no es una consulta embebida en texto.
+    """
+    out = []
+    for pos, fuente in celdas or []:
+        q = re.sub(r"^\s*%sql\b", "", fuente, count=1)
+        cuerpo = re.sub(r"^\s*-{2,}.*$", "", q, flags=re.M)   # sin comentarios
+        ln = nro_linea(codigo, pos)
+
+        if activa("SQL-01"):
+            for kw in SQL_KEYWORDS:
+                if re.search(rf"\b{kw}\b", cuerpo) and not re.search(rf"\b{kw.upper()}\b", cuerpo):
+                    out.append(h("SQL-01", path, cuerpo[:80],
+                                 f"Encontrado: {kw}. En una celda SQL.", ln))
+                    break
+
+        if activa("NBK-13") and re.search(r"select\s+\*", cuerpo, re.I):
+            out.append(h("NBK-13", path, cuerpo[:80], "En una celda SQL.", ln))
     return out
 
 
@@ -645,8 +692,9 @@ def evaluar(path, texto):
         return (reglas_ddl(path, texto) + reglas_sql(path, texto)
                 + reglas_rutas(path, texto) + reglas_operaciones(path, texto))
 
+    celdas_sql = []
     if bajo.endswith(".ipynb"):
-        codigo, markdown = extraer_codigo_ipynb(texto)
+        codigo, markdown, celdas_sql = extraer_codigo_ipynb(texto)
         if codigo is None:
             return [h("FMT-01", path, texto[:120], "No es un JSON valido.")]
     else:
@@ -657,6 +705,7 @@ def evaluar(path, texto):
     out += reglas_logging(path, codigo)
     out += reglas_lakehouse(path, codigo)
     out += reglas_sql(path, codigo)
+    out += reglas_sql_celdas(path, celdas_sql, codigo)
     out += reglas_ddl(path, codigo)
     out += reglas_rutas(path, codigo)
     out += reglas_operaciones(path, codigo)
@@ -670,10 +719,16 @@ def evaluar(path, texto):
 
 
 def aplicable(path):
-    if not path.lower().endswith(tuple(OPCIONES["extensiones"])):
+    """Las carpetas excluidas son las de la raiz del repositorio.
+
+    Se compara el primer segmento y no cualquier nivel: de lo contrario la
+    carpeta config de un macroproceso quedaria fuera de la evaluacion.
+    """
+    p = path.replace("\\", "/").lstrip("./")
+    if not p.lower().endswith(tuple(OPCIONES["extensiones"])):
         return False
-    partes = {p.lower() for p in path.split("/")}
-    return not (set(OPCIONES["carpetas_excluidas"]) & partes)
+    raiz = p.split("/")[0].lower()
+    return raiz not in {c.lower() for c in OPCIONES["carpetas_excluidas"]}
 
 
 # -------------------------------------------------------------------- salida
