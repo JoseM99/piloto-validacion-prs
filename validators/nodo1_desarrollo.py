@@ -569,6 +569,29 @@ def reglas_operaciones(path, codigo):
 
 
 # ------------------------------------------------------- repositorio · ADB-WS
+def _subcarpetas(base):
+    """Subcarpetas de un directorio, indexadas en minusculas.
+
+    El repositorio nombra las carpetas con mayuscula inicial y el runner corre
+    sobre un sistema que distingue mayusculas, asi que la comparacion directa
+    contra la lista del catalogo fallaba.
+    """
+    try:
+        return {n.lower(): n for n in os.listdir(base)
+                if os.path.isdir(os.path.join(base, n))}
+    except OSError:
+        return {}
+
+
+def _archivos(base):
+    """Archivos de un directorio. Lista vacia si la ruta no existe."""
+    try:
+        return sorted(n for n in os.listdir(base)
+                      if os.path.isfile(os.path.join(base, n)))
+    except OSError:
+        return []
+
+
 def macroprocesos_tocados(rutas):
     """Carpeta que contiene al tipo de artefacto. Devuelve la ruta relativa."""
     tipos = {c.lower() for c in LISTAS["carpetas_macroproceso"]}
@@ -591,13 +614,15 @@ def reglas_repositorio(raiz, macros):
 
     # ADB-WS-02 · carpetas transversales
     if activa("WS-02"):
+        en_raiz = _subcarpetas(raiz)
         for carpeta, subs in LISTAS["carpetas_transversales"].items():
-            base = os.path.join(raiz, carpeta)
-            if not os.path.isdir(base):
+            real = en_raiz.get(carpeta.lower())
+            if not real:
                 out.append(h("WS-02", carpeta + "/", "(no existe)",
                              f"Falta la carpeta {carpeta}."))
                 continue
-            faltan = [s for s in subs if not os.path.isdir(os.path.join(base, s))]
+            hay = _subcarpetas(os.path.join(raiz, real))
+            faltan = [s for s in subs if s.lower() not in hay]
             if faltan:
                 out.append(h("WS-02", carpeta + "/", ", ".join(faltan),
                              "Faltan subcarpetas: " + ", ".join(faltan) + "."))
@@ -606,39 +631,37 @@ def reglas_repositorio(raiz, macros):
         base = os.path.join(raiz, macro)
         if not os.path.isdir(base):
             continue
+        hay = _subcarpetas(base)
 
         # ADB-WS-01 · macroproceso autocontenido
         if activa("WS-01"):
-            hay = [c for c in LISTAS["carpetas_macroproceso"]
-                   if os.path.isdir(os.path.join(base, c))]
-            if not hay:
+            if not [c for c in LISTAS["carpetas_macroproceso"] if c.lower() in hay]:
                 out.append(h("WS-01", macro + "/", "(sin carpetas del estandar)"))
 
         # ADB-WS-03 · las seis carpetas
         if activa("WS-03"):
-            faltan = [c for c in LISTAS["carpetas_macroproceso"]
-                      if not os.path.isdir(os.path.join(base, c))]
+            faltan = [c for c in LISTAS["carpetas_macroproceso"] if c.lower() not in hay]
             if faltan:
                 out.append(h("WS-03", macro + "/", ", ".join(faltan),
                              "Faltan: " + ", ".join(faltan) + "."))
-            ddl = os.path.join(base, "ddl")
-            if os.path.isdir(ddl) and not os.path.isdir(os.path.join(ddl, "schema_migrations")):
-                out.append(h("WS-03", macro + "/ddl/", "(sin schema_migrations)",
-                             "Falta la carpeta de migraciones."))
+            if "ddl" in hay:
+                sub = _subcarpetas(os.path.join(base, hay["ddl"]))
+                if "schema_migrations" not in sub:
+                    out.append(h("WS-03", macro + "/" + hay["ddl"] + "/",
+                                 "(sin schema_migrations)",
+                                 "Falta la carpeta de migraciones."))
 
         # ADB-WS-04 · prefijo por tipo de artefacto
         if activa("WS-04"):
             for carpeta, prefijos in LISTAS["prefijos_artefacto"].items():
-                dirc = os.path.join(base, carpeta)
-                if not os.path.isdir(dirc):
+                real = hay.get(carpeta.lower())
+                if not real:
                     continue
-                for nombre in sorted(os.listdir(dirc)):
-                    if not os.path.isfile(os.path.join(dirc, nombre)):
-                        continue
+                for nombre in _archivos(os.path.join(base, real)):
                     if not nombre.endswith(tuple(OPCIONES["extensiones"])):
                         continue
-                    if not any(nombre.startswith(p) for p in prefijos):
-                        out.append(h("WS-04", f"{macro}/{carpeta}/{nombre}", nombre,
+                    if not any(nombre.lower().startswith(p) for p in prefijos):
+                        out.append(h("WS-04", f"{macro}/{real}/{nombre}", nombre,
                                      "Se esperaba: " + " o ".join(prefijos) + "."))
     return out
 
