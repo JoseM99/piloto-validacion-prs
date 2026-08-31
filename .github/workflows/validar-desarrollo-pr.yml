@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python validators/nodo1_desarrollo.py
+        run: python validators/validar_desarrollo.py
 
       - name: Nodo 2 - revision con criterio
         id: nodo2
