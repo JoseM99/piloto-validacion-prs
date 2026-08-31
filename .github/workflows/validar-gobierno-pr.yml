@@ -24,7 +24,7 @@ jobs:
       - name: Validar plantilla del PR
         id: val
         continue-on-error: true
-        run: python validators/nodo1_pr_gobierno.py
+        run: python validators/validar_gobierno_pr.py
 
       - name: Publicar comentario unico
         if: always()
