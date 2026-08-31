@@ -1,0 +1,302 @@
+name: Validar PR
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: validador-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  MARCA: "<!-- validador-lakehouse -->"
+  TOPE_HALLAZGOS: 20
+  TAREA_SALIDA: consolidar
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------
+      # 1 · Gobierno del PR. Si no pasa, no se gasta computo en el motor.
+      # ---------------------------------------------------------------
+      - name: Gobierno del PR
+        id: gob
+        continue-on-error: true
+        run: python validators/validar_gobierno_pr.py
+
+      - name: Estado del gobierno
+        id: estado_gob
+        run: |
+          EST=$(jq -r '.estado_global // "ERROR"' veredicto_gobierno.json 2>/dev/null || echo "ERROR")
+          echo "estado=$EST" >> $GITHUB_OUTPUT
+          echo "Gobierno: $EST"
+
+      # ---------------------------------------------------------------
+      # 2 · Reglas deterministas. Corre en el runner, sin Databricks.
+      # ---------------------------------------------------------------
+      - name: Reglas deterministas
+        id: det
+        if: steps.estado_gob.outputs.estado == 'APROBADO'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python validators/validar_desarrollo.py
+
+      - name: Archivos evaluados
+        id: conteo
+        if: steps.estado_gob.outputs.estado == 'APROBADO'
+        run: |
+          N=$(jq '.archivos_evaluados | length' veredicto_desarrollo.json 2>/dev/null || echo 0)
+          echo "archivos=$N" >> $GITHUB_OUTPUT
+          echo "Archivos evaluables en el cambio: $N"
+
+      # ---------------------------------------------------------------
+      # 3 · Capa de criterio. Solo si hay algo que revisar.
+      # ---------------------------------------------------------------
+      - name: Revision con criterio
+        id: criterio
+        if: steps.estado_gob.outputs.estado == 'APROBADO' && steps.conteo.outputs.archivos != '0'
+        continue-on-error: true
+        env:
+          HOST:  ${{ secrets.DATABRICKS_HOST }}
+          TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          JOBID: ${{ secrets.DATABRICKS_JOB_ID_DEV }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
+
+          RUN_ID=$(curl -sS -X POST "$HOST/api/2.1/jobs/run-now" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d "$(jq -n --argjson job_id "$JOBID" --arg repo "$GITHUB_REPOSITORY" \
+                   --arg pr "${{ github.event.pull_request.number }}" \
+                   --arg tok "$GH_TOKEN" \
+                   '{job_id:$job_id, notebook_params:{repo:$repo, pr_number:$pr, gh_token:$tok}}')" \
+            | jq -r '.run_id // empty')
+
+          if [ -z "$RUN_ID" ]; then
+            echo "No se pudo disparar el Job de Databricks." > ia_motivo.txt
+            echo "No se pudo disparar la revision con criterio"
+            exit 0
+          fi
+          echo "Job disparado: run_id=$RUN_ID"
+
+          RESP=""
+          TERMINO="no"
+          for i in $(seq 1 60); do
+            RESP=$(curl -sS "$HOST/api/2.1/jobs/runs/get?run_id=$RUN_ID" \
+              -H "Authorization: Bearer $TOKEN")
+            ST=$(echo "$RESP" | jq -r '.status.state // .state.life_cycle_state // "?"')
+            echo "[$i] estado=$ST"
+            case "$ST" in
+              TERMINATED|INTERNAL_ERROR|SKIPPED|SUCCESS|FAILED) TERMINO="si"; break ;;
+            esac
+            sleep 10
+          done
+
+          if [ "$TERMINO" = "no" ]; then
+            echo "La revision con criterio supero el tiempo de espera de 10 minutos." > ia_motivo.txt
+            echo "Timeout esperando al Job"
+            exit 0
+          fi
+
+          # La salida se toma de la tarea consolidadora POR NOMBRE. Con varias
+          # tareas, tasks[0] es la determinista y no devuelve el veredicto.
+          TRID=$(echo "$RESP" | jq -r --arg k "$TAREA_SALIDA" \
+                   '(.tasks[]? | select(.task_key==$k) | .run_id) // empty' | head -1)
+          if [ -z "$TRID" ]; then
+            TRID=$(echo "$RESP" | jq -r '.tasks[-1].run_id // empty')
+            echo "Tarea '$TAREA_SALIDA' no encontrada. Se usa la ultima tarea del Job."
+          fi
+          if [ -z "$TRID" ]; then TRID="$RUN_ID"; fi
+          echo "Leyendo salida de la tarea run_id=$TRID"
+
+          curl -sS "$HOST/api/2.1/jobs/runs/get-output?run_id=$TRID" \
+            -H "Authorization: Bearer $TOKEN" | jq -r '.notebook_output.result // empty' > salida.json
+
+          if [ ! -s salida.json ]; then
+            echo "La revision con criterio no devolvio resultado." > ia_motivo.txt
+            echo "Sin salida del Job"
+            rm -f salida.json
+            exit 0
+          fi
+
+          # El consolidador devuelve los dos veredictos. Solo interesa el de criterio.
+          if jq -e 'has("ia")' salida.json > /dev/null; then
+            jq '{hallazgos: .ia, ia_ejecutada: .ia_ejecutada}' salida.json > ia.json
+          else
+            cp salida.json ia.json
+          fi
+          echo "Salida de la revision con criterio recibida"
+
+      # ---------------------------------------------------------------
+      # 4 · Un solo comentario con las dos secciones.
+      # ---------------------------------------------------------------
+      - name: Publicar comentario unico
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          EST_GOB: ${{ steps.estado_gob.outputs.estado }}
+        run: |
+          set -uo pipefail
+          FECHA=$(TZ='America/Lima' date +"%d/%m/%Y %H:%M")
+
+          if [ -s veredicto_desarrollo.json ]; then
+            EST_DEV=$(jq -r '.estado_global' veredicto_desarrollo.json)
+            CATALOGO=$(jq -r '.catalogo' veredicto_desarrollo.json)
+            CHECKLIST=$(jq -r '.checklist' veredicto_desarrollo.json)
+            ARCHIVOS=$(jq '.archivos_evaluados | length' veredicto_desarrollo.json)
+            OBL=$(jq '[.hallazgos[] | select(.criticidad=="OBL")] | length' veredicto_desarrollo.json)
+            OPC=$(jq '[.hallazgos[] | select(.criticidad=="OPC")] | length' veredicto_desarrollo.json)
+          else
+            EST_DEV="NO EVALUADO"; CATALOGO="-"; CHECKLIST="-"; ARCHIVOS=0; OBL=0; OPC=0
+          fi
+
+          if [ "$EST_GOB" = "APROBADO" ] && [ "$EST_DEV" = "APROBADO" ]; then
+            TITULO="Validacion del PR: APROBADO"
+          else
+            TITULO="Validacion del PR: RECHAZADO"
+          fi
+
+          {
+            echo "$MARCA"
+            echo "## $TITULO"
+            echo ""
+
+            # ---------- Bloque 1: gobierno ----------
+            echo "### 1. Gobierno del PR: $EST_GOB"
+            echo ""
+            if [ -s veredicto_gobierno.json ]; then
+              jq -r 'if (.hallazgos|length) > 0
+                     then (.hallazgos[] | "- **`\(.regla_id)`** — \(.explicacion)" +
+                           (if (.evidencia // "") != "" then "  \n  `\(.evidencia)`" else "" end))
+                     else "- Rama, asunto y descripcion del pase conformes." end' veredicto_gobierno.json
+            else
+              echo "- No se pudo evaluar el gobierno del PR."
+            fi
+            echo ""
+
+            # ---------- Bloque 2: desarrollo ----------
+            if [ "$EST_GOB" != "APROBADO" ]; then
+              echo "### 2. Desarrollo Lakehouse: no evaluado"
+              echo ""
+              echo "_El contenido de los archivos no se revisa hasta que el gobierno del PR este conforme._"
+            elif [ "$ARCHIVOS" -eq 0 ]; then
+              echo "### 2. Desarrollo Lakehouse: sin archivos evaluables"
+              echo ""
+              echo "_El cambio no incluye archivos sujetos al estandar de desarrollo._"
+            else
+              echo "### 2. Desarrollo Lakehouse: $EST_DEV"
+              echo ""
+              echo "Checklist \`$CHECKLIST\` · catalogo \`$CATALOGO\` · archivos evaluados: $ARCHIVOS"
+              echo ""
+              echo "| | Cantidad |"
+              echo "| --- | --- |"
+              echo "| Obligatorios (impiden la integracion) | $OBL |"
+              echo "| Opcionales (no bloquean) | $OPC |"
+              echo ""
+
+              if [ "$OBL" -gt 0 ]; then
+                echo "#### Debes corregir antes de continuar"
+                echo ""
+                jq -r --argjson tope "$TOPE_HALLAZGOS" '
+                  [.hallazgos[] | select(.criticidad=="OBL")]
+                  | group_by(.archivo)
+                  | map({archivo: .[0].archivo, items: .})
+                  | .[]
+                  | "**\(.archivo)**\n" +
+                    (.items[:$tope]
+                     | map("- **`\(.codigo)`**" +
+                           (if .linea then " · linea \(.linea)" else "" end) +
+                           "  \n  \(.mensaje)  \n  _\(.correccion)_" +
+                           (if (.evidencia // "") != "" then "  \n  `\(.evidencia)`" else "" end))
+                     | join("\n")) +
+                    (if (.items | length) > $tope
+                     then "\n- _… y \(.items | length - $tope) hallazgo(s) mas en el log del check._"
+                     else "" end) + "\n"' veredicto_desarrollo.json
+              fi
+
+              if [ "$OPC" -gt 0 ]; then
+                echo ""
+                echo "<details><summary>Recomendaciones ($OPC · no bloquean el pase)</summary>"
+                echo ""
+                jq -r '
+                  [.hallazgos[] | select(.criticidad=="OPC")]
+                  | group_by(.archivo)
+                  | map({archivo: .[0].archivo, items: .})
+                  | .[]
+                  | "**\(.archivo)**\n" +
+                    (.items | map("- `\(.codigo)`" +
+                                  (if .linea then " · linea \(.linea)" else "" end) +
+                                  " — \(.mensaje)") | join("\n")) + "\n"' veredicto_desarrollo.json
+                echo ""
+                echo "</details>"
+              fi
+
+              if [ "$OBL" -eq 0 ] && [ "$OPC" -eq 0 ]; then
+                echo "Sin hallazgos deterministas."
+              fi
+
+              if [ -s ia.json ]; then
+                IA_N=$(jq '.hallazgos | length' ia.json)
+                echo ""
+                echo "<details><summary>Revision con criterio ($IA_N · referencial, no bloquea)</summary>"
+                echo ""
+                jq -r 'if (.hallazgos|length) > 0
+                       then (.hallazgos[] | "- `\(.codigo // .regla_id)` — \(.explicacion)  \n  `\((.evidencia // "") | gsub("[\\n\\r]+"; " ") | .[0:120])`  \n  _\(.archivo)_")
+                       else "- Sin observaciones adicionales sobre las reglas de criterio." end' ia.json
+                echo ""
+                echo "</details>"
+              elif [ -s ia_motivo.txt ]; then
+                echo ""
+                echo "_Revision con criterio no disponible: $(cat ia_motivo.txt)_"
+              fi
+            fi
+
+            echo ""
+            echo "<sub>Cada codigo corresponde a una validacion del Checklist del CoE Data & Analytics.</sub>"
+            echo ""
+            echo "<sub>Actualizado: $FECHA · [run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>"
+          } > comentario.md
+
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+                 --jq "[.[] | select(.body | contains(\"$MARCA\"))] | last | .id // empty")
+
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" -F body=@comentario.md
+            echo "Comentario $ID actualizado"
+          else
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body-file comentario.md
+            echo "Comentario creado"
+          fi
+
+      # ---------------------------------------------------------------
+      # 5 · Estado del check. Falla cerrado ante cualquier ausencia.
+      # ---------------------------------------------------------------
+      - name: Estado final del check
+        if: always()
+        env:
+          EST_GOB: ${{ steps.estado_gob.outputs.estado }}
+        run: |
+          if [ "$EST_GOB" != "APROBADO" ]; then
+            echo "Gobierno del PR no conforme: $EST_GOB"
+            exit 1
+          fi
+
+          if [ ! -s veredicto_desarrollo.json ]; then
+            echo "El validador de desarrollo no genero veredicto. Se considera no conforme."
+            exit 1
+          fi
+
+          EST_DEV=$(jq -r '.estado_global' veredicto_desarrollo.json)
+          echo "Gobierno: $EST_GOB · Desarrollo: $EST_DEV"
+          [ "$EST_DEV" = "APROBADO" ] || exit 1
