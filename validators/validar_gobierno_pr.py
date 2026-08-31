@@ -1,4 +1,5 @@
-"""Nodo 1 - Gobierno del PR. Reglas PR-01, PR-02, PR-03 del Checklist v2 CoE."""
+"""Validador de gobierno del Pull Request. 
+"""
 import json
 import os
 import re
