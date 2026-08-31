@@ -1,9 +1,9 @@
-"""Nodo 1 - Desarrollo Lakehouse.
+"""Validador de desarrollo Lakehouse.
 
 Reglas deterministas del Checklist v4. Corre en el runner de GitHub Actions.
 Toda la definicion de reglas, listas y limites vive en el catalogo.
 
-Uso local:  python validators/nodo1_desarrollo.py --local <archivo> [...]
+Uso local:  python validators/validar_desarrollo.py --local <archivo> [...]
 """
 import json
 import os
