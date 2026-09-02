@@ -18,14 +18,17 @@ CAMPOS = ["Squad", "Objetivo", "Desarrollador", "PO", "Líder Técnico"]
 
 
 def normalizar(texto):
-    """Quita tildes y pasa a minusculas, para comparar sin depender del acento.
+    """Deja el texto comparable: sin tildes, sin marcas de formato y en minusculas.
 
-    El anexo del checklist escribe algunos nombres de campo sin tilde, asi que
-    compararlos de forma exacta marcaba como vacio un campo que si estaba.
+    Dos motivos. El anexo del checklist escribe algunos nombres de campo sin
+    tilde, y en la descripcion del pase esos nombres suelen venir resaltados,
+    con los dos puntos fuera del resaltado. En ambos casos la comparacion
+    exacta marcaba como vacio un campo que si estaba informado.
     """
     sin_tilde = unicodedata.normalize("NFKD", texto or "")
     sin_tilde = "".join(c for c in sin_tilde if not unicodedata.combining(c))
-    return sin_tilde.lower()
+    sin_formato = re.sub(r"[*_`~]", "", sin_tilde)
+    return sin_formato.lower()
 
 
 def validar(rama, titulo, cuerpo):
@@ -90,7 +93,7 @@ def main():
     hallazgos = validar(pr["head"]["ref"], pr["title"], pr.get("body"))
 
     veredicto = {
-        "skill": "mibanco.pr-gobierno v1.1.0",
+        "skill": "mibanco.pr-gobierno v1.2.0",
         "estado_global": "RECHAZADO" if hallazgos else "APROBADO",
         "hallazgos": hallazgos,
     }
