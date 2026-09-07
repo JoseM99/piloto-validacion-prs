@@ -3,6 +3,11 @@ name: Validar PR
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+    paths:
+      - '**.ipynb'
+      - '**.py'
+      - '**.sql'
+      - '**.json'
 
 permissions:
   contents: read
@@ -56,6 +61,26 @@ jobs:
           N=$(jq '.archivos_evaluados | length' veredicto_desarrollo.json 2>/dev/null || echo 0)
           echo "archivos=$N" >> $GITHUB_OUTPUT
           echo "Archivos evaluables en el cambio: $N"
+
+      # El titulo de la seccion nombra la tecnologia que se reviso, para que el
+      # desarrollador no lea "Lakehouse" en un cambio de Data Factory.
+      - name: Ambito de la revision
+        id: ambito
+        if: steps.estado_gob.outputs.estado == 'APROBADO'
+        run: |
+          LAKE=$(jq '[.archivos_evaluados[]? | select(test("\\.(ipynb|py|sql)$"))] | length' \
+                 veredicto_desarrollo.json 2>/dev/null || echo 0)
+          ADF=$(jq '[.archivos_evaluados[]? | select(test("/(pipelines?|datasets?)/"))] | length' \
+                 veredicto_desarrollo.json 2>/dev/null || echo 0)
+
+          if   [ "$LAKE" -gt 0 ] && [ "$ADF" -gt 0 ]; then TITULO="Lakehouse y Data Factory"
+          elif [ "$ADF"  -gt 0 ];                     then TITULO="Data Factory"
+          elif [ "$LAKE" -gt 0 ];                     then TITULO="Lakehouse"
+          else                                             TITULO="Estandar de desarrollo"
+          fi
+
+          echo "titulo=$TITULO" >> $GITHUB_OUTPUT
+          echo "Ambito: $TITULO (lakehouse=$LAKE, data factory=$ADF)"
 
       # ---------------------------------------------------------------
       # 3 · Capa de criterio. Solo si hay algo que revisar.
@@ -146,9 +171,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           EST_GOB: ${{ steps.estado_gob.outputs.estado }}
+          AMBITO: ${{ steps.ambito.outputs.titulo }}
         run: |
           set -uo pipefail
           FECHA=$(TZ='America/Lima' date +"%d/%m/%Y %H:%M")
+          [ -n "${AMBITO:-}" ] || AMBITO="Estandar de desarrollo"
 
           if [ -s veredicto_desarrollo.json ]; then
             EST_DEV=$(jq -r '.estado_global' veredicto_desarrollo.json)
@@ -187,15 +214,15 @@ jobs:
 
             # ---------- Bloque 2: desarrollo ----------
             if [ "$EST_GOB" != "APROBADO" ]; then
-              echo "### 2. Desarrollo Lakehouse: no evaluado"
+              echo "### 2. Estandar de desarrollo: no evaluado"
               echo ""
               echo "_El contenido de los archivos no se revisa hasta que el gobierno del PR este conforme._"
             elif [ "$ARCHIVOS" -eq 0 ]; then
-              echo "### 2. Desarrollo Lakehouse: sin archivos evaluables"
+              echo "### 2. Estandar de desarrollo: sin archivos evaluables"
               echo ""
-              echo "_El cambio no incluye archivos sujetos al estandar de desarrollo._"
+              echo "_El cambio no incluye archivos sujetos al estandar._"
             else
-              echo "### 2. Desarrollo Lakehouse: $EST_DEV"
+              echo "### 2. $AMBITO: $EST_DEV"
               echo ""
               echo "Checklist \`$CHECKLIST\` · catalogo \`$CATALOGO\` · archivos evaluados: $ARCHIVOS"
               echo ""
@@ -243,7 +270,9 @@ jobs:
               fi
 
               if [ "$OBL" -eq 0 ] && [ "$OPC" -eq 0 ]; then
-                echo "Sin hallazgos deterministas."
+                echo "Sin hallazgos deterministas en:"
+                echo ""
+                jq -r '.archivos_evaluados[] | "- `\(.)`"' veredicto_desarrollo.json
               fi
 
               if [ -s ia.json ]; then
