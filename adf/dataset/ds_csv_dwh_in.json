@@ -1,0 +1,24 @@
+{
+	"name": "ds_csv_dwh_in",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "ls_blob_piloto",
+			"type": "LinkedServiceReference"
+		},
+		"folder": {
+			"name": "Azure/Storage"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation"
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}
