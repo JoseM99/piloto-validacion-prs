@@ -1,4 +1,4 @@
-"""Validador de desarrollo Lakehouse.
+"""Validador de desarrollo: Lakehouse y Data Factory.
 
 Reglas deterministas del Checklist v4. Corre en el runner de GitHub Actions.
 Toda la definicion de reglas, listas y limites vive en el catalogo.
@@ -667,10 +667,29 @@ def reglas_repositorio(raiz, macros):
 
 
 # --------------------------------------------------------------- ADF · ADF-*
+def _tipo_artefacto_adf(path):
+    """Pipeline o dataset segun la CARPETA que contiene al archivo.
+
+    Se compara por segmento de ruta y no por subcadena: buscar "/pipeline"
+    dentro del texto acierta o falla segun el nombre del archivo y segun si la
+    carpeta cuelga de la raiz. Se aceptan singular y plural porque el Studio
+    escribe en singular y el checklist los nombra en plural.
+    """
+    segmentos = {s.lower() for s in path.replace("\\", "/").split("/")[:-1]}
+    if segmentos & {"pipeline", "pipelines"}:
+        return "pipeline"
+    if segmentos & {"dataset", "datasets"}:
+        return "dataset"
+    return None
+
+
 def reglas_adf(path, texto):
     out = []
     nombre = os.path.splitext(os.path.basename(path))[0]
-    bajo = path.lower()
+    tipo = _tipo_artefacto_adf(path)
+
+    if not tipo:
+        return out   # linked services y demas artefactos quedan fuera de alcance
 
     try:
         doc = json.loads(texto)
@@ -679,7 +698,7 @@ def reglas_adf(path, texto):
     except (json.JSONDecodeError, AttributeError):
         carpeta = ""
 
-    if "/pipeline" in bajo:
+    if tipo == "pipeline":
         if activa("ADF-PIP-01"):
             nivel = carpeta.split("/")[0] if carpeta else ""
             if nivel not in LISTAS["carpetas_pipeline"]:
@@ -689,7 +708,7 @@ def reglas_adf(path, texto):
             if not re.match(r"^pipeline_(master|load)_[A-Za-z0-9]+(_[A-Za-z0-9]+)*$", nombre):
                 out.append(h("ADF-PIP-02", path, nombre))
 
-    elif "/dataset" in bajo:
+    else:
         if activa("ADF-DS-01"):
             if carpeta not in LISTAS["rutas_dataset"]:
                 out.append(h("ADF-DS-01", path, carpeta or "(sin carpeta)",
