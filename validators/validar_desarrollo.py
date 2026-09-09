@@ -427,8 +427,9 @@ def reglas_ddl(path, codigo):
                 out.append(h("DDL-01", path, objeto,
                              "Se esperaba catalogo.esquema.tabla.", ln))
 
-        # ADB-DDL-01 · prefijo por capa
         capa = _capa(objeto)
+
+        # ADB-DDL-01 · prefijo por capa
         if capa and activa("DDL-02"):
             validos = tuple(LISTAS["prefijos_tabla"][capa])
             if not tabla.lower().startswith(validos):
@@ -457,23 +458,39 @@ def reglas_ddl(path, codigo):
         if activa("DDL-14") and not re.search(r"USING\s+DELTA", bloque, re.I):
             out.append(h("DDL-14", path, objeto, None, ln))
 
-        # ADB-DDL-02 · campos tecnicos de auditoria
-        if activa("DDL-05"):
-            low = bloque.lower()
-            faltan = [c for c in ("_ingestion_time", "_processing_time") if c not in low]
-            if faltan:
-                out.append(h("DDL-05", path, objeto, "Faltan: " + ", ".join(faltan), ln))
+        # Esquema permitido por capa · ADB-DDL-03 y ADB-DDL-07
+        rid_esq = {"silver": "DDL-03S", "gold": "DDL-07G"}.get(capa)
+        if rid_esq and activa(rid_esq) and objeto.count(".") == 2:
+            permitidos = LISTAS.get("esquemas_por_capa", {}).get(capa, [])
+            esquema = objeto.split(".")[1].lower()
+            if permitidos and esquema not in permitidos:
+                out.append(h(rid_esq, path, esquema,
+                             "Permitidos: " + ", ".join(permitidos) + ".", ln))
 
-        # ADB-DDL-06 · etiquetas de la tabla
-        if activa("DDL-06"):
+        # Campos de auditoria · el codigo depende de la capa
+        rid_aud = {"bronze": "DDL-05", "silver": "DDL-05S", "gold": "DDL-05G"}.get(capa, "DDL-05")
+        if activa(rid_aud):
+            low = bloque.lower()
+            aud = LISTAS.get("campos_auditoria", {})
+            exigidos = list(aud.get("obligatorios", ["_ingestion_time", "_processing_time"]))
+            # el indicador de borrado logico solo se exige en tablas maestras
+            if capa == "silver" and tabla.lower().startswith("m_"):
+                exigidos += aud.get("solo_maestras", [])
+            faltan = [c for c in exigidos if c not in low]
+            if faltan:
+                out.append(h(rid_aud, path, objeto, "Faltan: " + ", ".join(faltan), ln))
+
+        # Etiquetas de la tabla · el codigo depende de la capa
+        rid_tag = {"gold": "DDL-09G"}.get(capa, "DDL-06")
+        if activa(rid_tag):
             m_tags = re.search(r"TBLPROPERTIES\s*\(([\s\S]*?)\)", bloque, re.I)
             if not m_tags:
-                out.append(h("DDL-06", path, objeto, "No se declaran etiquetas.", ln))
+                out.append(h(rid_tag, path, objeto, "No se declaran etiquetas.", ln))
             else:
                 props = m_tags.group(1).lower()
                 faltan = [t for t in LISTAS["tags_tabla"] if t not in props]
                 if faltan:
-                    out.append(h("DDL-06", path, objeto,
+                    out.append(h(rid_tag, path, objeto,
                                  "Faltan: " + ", ".join(faltan), ln))
 
         # ADB-DDL-16 a 20 · campos
