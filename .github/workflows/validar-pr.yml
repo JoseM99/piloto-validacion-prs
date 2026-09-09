@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: validador-${{ github.event.pull_request.number }}
@@ -83,7 +84,69 @@ jobs:
           echo "Ambito: $TITULO (lakehouse=$LAKE, data factory=$ADF)"
 
       # ---------------------------------------------------------------
-      # 3 · Capa de criterio. Solo si hay algo que revisar.
+      # 3 · Identidad federada. Token de vida corta, sin secreto guardado.
+      # ---------------------------------------------------------------
+      - name: Canje del token OIDC
+        id: oidc
+        if: steps.estado_gob.outputs.estado == 'APROBADO' && steps.conteo.outputs.archivos != '0'
+        continue-on-error: true
+        env:
+          CUENTA:   ${{ secrets.DATABRICKS_ACCOUNT_ID }}
+          CLIENTE:  ${{ secrets.DATABRICKS_CLIENT_ID }}
+          AUDIENCIA: ${{ secrets.DATABRICKS_AUDIENCE }}
+        run: |
+          set -uo pipefail
+
+          # Token de identidad que GitHub emite para esta corrida.
+          JWT=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                  "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCIA}" \
+                | jq -r '.value // empty')
+
+          if [ -z "$JWT" ]; then
+            echo "GitHub no emitio el token de identidad."
+            echo "no_canje=GitHub no emitio el token de identidad." >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # El subject viaja dentro del JWT y debe coincidir con la politica.
+          SUJETO=$(echo "$JWT" | cut -d. -f2 | tr '_-' '/+' \
+                   | awk '{ l=length($0)%4; if (l==2) print $0"=="; else if (l==3) print $0"="; else print $0 }' \
+                   | base64 -d 2>/dev/null | jq -r '.sub // "?"')
+          echo "Subject presentado: $SUJETO"
+
+          RESP=$(curl -sS -w '\n%{http_code}' -X POST \
+            "https://accounts.cloud.databricks.com/oidc/accounts/$CUENTA/v1/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "scope=all-apis" \
+            --data-urlencode "client_id=$CLIENTE" \
+            --data-urlencode "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+            --data-urlencode "client_assertion=$JWT")
+
+          CODIGO=$(echo "$RESP" | tail -n 1)
+          CUERPO=$(echo "$RESP" | sed '$d')
+
+          if [ "$CODIGO" != "200" ]; then
+            DETALLE=$(echo "$CUERPO" | jq -r '.error_description // .error // empty' 2>/dev/null)
+            [ -n "$DETALLE" ] || DETALLE="$CUERPO"
+            echo "El canje devolvio HTTP $CODIGO: $DETALLE"
+            echo "no_canje=El canje del token federado devolvio HTTP $CODIGO." >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          ACCESO=$(echo "$CUERPO" | jq -r '.access_token // empty')
+          if [ -z "$ACCESO" ]; then
+            echo "Respuesta correcta pero sin access_token."
+            echo "no_canje=El canje respondio sin token de acceso." >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "::add-mask::$ACCESO"
+          echo "acceso=$ACCESO" >> $GITHUB_OUTPUT
+          echo "Canje correcto. Token de acceso obtenido."
+
+      # ---------------------------------------------------------------
+      # 4 · Capa de criterio. Solo si hay algo que revisar.
       # ---------------------------------------------------------------
       - name: Revision con criterio
         id: criterio
@@ -91,12 +154,19 @@ jobs:
         continue-on-error: true
         env:
           HOST:  ${{ secrets.DATABRICKS_HOST }}
-          TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          TOKEN: ${{ steps.oidc.outputs.acceso }}
+          MOTIVO_OIDC: ${{ steps.oidc.outputs.no_canje }}
           JOBID: ${{ secrets.DATABRICKS_JOB_ID_DEV }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "${MOTIVO_OIDC:-No se obtuvo el token federado.}" > ia_motivo.txt
+            echo "Sin credencial para llamar a Databricks"
+            exit 0
+          fi
 
           RUN_ID=$(curl -sS -X POST "$HOST/api/2.1/jobs/run-now" \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
@@ -162,7 +232,7 @@ jobs:
           echo "Salida de la revision con criterio recibida"
 
       # ---------------------------------------------------------------
-      # 4 · Un solo comentario con las dos secciones.
+      # 5 · Un solo comentario con las dos secciones.
       # ---------------------------------------------------------------
       - name: Publicar comentario unico
         if: always()
@@ -309,7 +379,7 @@ jobs:
           fi
 
       # ---------------------------------------------------------------
-      # 5 · Estado del check. Falla cerrado ante cualquier ausencia.
+      # 6 · Estado del check. Falla cerrado ante cualquier ausencia.
       # ---------------------------------------------------------------
       - name: Estado final del check
         if: always()
