@@ -91,11 +91,12 @@ jobs:
         if: steps.estado_gob.outputs.estado == 'APROBADO' && steps.conteo.outputs.archivos != '0'
         continue-on-error: true
         env:
-          CUENTA:   ${{ secrets.DATABRICKS_ACCOUNT_ID }}
-          CLIENTE:  ${{ secrets.DATABRICKS_CLIENT_ID }}
+          HOST:      ${{ secrets.DATABRICKS_HOST }}
+          CLIENTE:   ${{ secrets.DATABRICKS_CLIENT_ID }}
           AUDIENCIA: ${{ secrets.DATABRICKS_AUDIENCE }}
         run: |
           set -uo pipefail
+          HOST="$(echo "$HOST" | tr -d '[:space:]')"; HOST="${HOST%/}"
 
           # Token de identidad que GitHub emite para esta corrida.
           JWT=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
@@ -109,19 +110,20 @@ jobs:
           fi
 
           # El subject viaja dentro del JWT y debe coincidir con la politica.
+          # GitHub lo emite con los identificadores inmutables del dueno y del repo.
           SUJETO=$(echo "$JWT" | cut -d. -f2 | tr '_-' '/+' \
                    | awk '{ l=length($0)%4; if (l==2) print $0"=="; else if (l==3) print $0"="; else print $0 }' \
                    | base64 -d 2>/dev/null | jq -r '.sub // "?"')
           echo "Subject presentado: $SUJETO"
 
           RESP=$(curl -sS -w '\n%{http_code}' -X POST \
-            "https://accounts.cloud.databricks.com/oidc/accounts/$CUENTA/v1/token" \
+            "$HOST/oidc/v1/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
-            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+            --data-urlencode "subject_token=$JWT" \
+            --data-urlencode "subject_token_type=urn:ietf:params:oauth:token-type:jwt" \
             --data-urlencode "scope=all-apis" \
-            --data-urlencode "client_id=$CLIENTE" \
-            --data-urlencode "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
-            --data-urlencode "client_assertion=$JWT")
+            --data-urlencode "client_id=$CLIENTE")
 
           CODIGO=$(echo "$RESP" | tail -n 1)
           CUERPO=$(echo "$RESP" | sed '$d')
