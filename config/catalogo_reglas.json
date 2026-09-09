@@ -1,5 +1,5 @@
 {
-  "version": "3.2.0",
+  "version": "3.3.0",
   "checklist": "v4",
   "_descripcion": "Catalogo unico de reglas del validador. Cada entrada declara el codigo del checklist que la sustenta, su criticidad y el texto de correccion. Editar aqui, nunca en el codigo.",
   "_leyenda": {
@@ -221,8 +221,9 @@
       "tipo_v4": "LLM",
       "tipo_aplicado": "Determinista",
       "estado": "activa",
-      "mensaje": "Faltan campos tecnicos de auditoria.",
-      "correccion": "Incorpora los campos tecnicos de auditoria que exige la capa."
+      "mensaje": "Faltan campos tecnicos de auditoria en la capa cruda.",
+      "correccion": "Incorpora los campos tecnicos de auditoria que exige la capa.",
+      "_alcance": "Se aplica a las tablas de la capa cruda. La capa estandarizada usa DDL-05S y la de publicacion DDL-05G."
     },
     "DDL-06": {
       "codigo": "ADB-DDL-06",
@@ -230,8 +231,9 @@
       "tipo_v4": "Hibrido",
       "tipo_aplicado": "Determinista",
       "estado": "activa",
-      "mensaje": "Faltan etiquetas obligatorias en la tabla.",
-      "correccion": "Declara las etiquetas obligatorias en las propiedades de la tabla."
+      "mensaje": "Faltan etiquetas obligatorias en la tabla de la capa estandarizada.",
+      "correccion": "Declara las etiquetas obligatorias en las propiedades de la tabla.",
+      "_alcance": "Se aplica a la capa estandarizada. La capa de publicacion usa DDL-09G."
     },
     "DDL-10": {
       "codigo": "ADB-DDL-10",
@@ -523,6 +525,57 @@
       "mensaje": "El archivo no pudo analizarse.",
       "correccion": "Revisa el formato del archivo: comas colgantes, comillas sin cerrar o estructura invalida.",
       "_nota": "Control tecnico del validador. No corresponde a una validacion del checklist."
+    },
+    "DDL-05S": {
+      "codigo": "ADB-DDL-05",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan campos tecnicos de auditoria en la capa estandarizada.",
+      "correccion": "Incorpora los campos tecnicos de auditoria que exige la capa.",
+      "_alcance": "El indicador de borrado logico solo se exige en tablas maestras."
+    },
+    "DDL-05G": {
+      "codigo": "ADB-DDL-08",
+      "criticidad": "OBL",
+      "tipo_v4": "LLM",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan campos tecnicos de auditoria en la capa de publicacion.",
+      "correccion": "Incorpora los campos tecnicos de auditoria que exige la capa.",
+      "_alcance": "El indicador de borrado logico solo se exige en tablas maestras."
+    },
+    "DDL-09G": {
+      "codigo": "ADB-DDL-09",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "Faltan etiquetas obligatorias en la tabla de la capa de publicacion.",
+      "correccion": "Declara las etiquetas obligatorias en las propiedades de la tabla.",
+      "_nota": "El checklist describe esta validacion con el texto de la capa estandarizada. Se aplica a la capa de publicacion segun su categoria declarada, pendiente de confirmacion con el area dueña."
+    },
+    "DDL-03S": {
+      "codigo": "ADB-DDL-03",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "activa",
+      "mensaje": "El esquema no es uno de los permitidos para la capa estandarizada.",
+      "correccion": "Usa uno de los esquemas definidos para la capa.",
+      "_alcance": "La exigencia de nombrar la tabla en ingles cuando el esquema es el de modelo financiero no se resuelve por condicion exacta y queda fuera de esta regla."
+    },
+    "DDL-07G": {
+      "codigo": "ADB-DDL-07",
+      "criticidad": "OBL",
+      "tipo_v4": "Hibrido",
+      "tipo_aplicado": "Determinista",
+      "estado": "parcial",
+      "mensaje": "El esquema no es uno de los permitidos para la capa de publicacion.",
+      "correccion": "Usa el esquema del area de negocio que corresponde.",
+      "_alcance": "Sin efecto mientras la lista de esquemas por area de negocio este vacia.",
+      "_pendiente": "Falta el catalogo de esquemas por area de negocio."
     }
   },
   "listas": {
@@ -655,6 +708,25 @@
       "bronze": "^abfss://bronze@[a-z0-9]+\\.dfs\\.core\\.windows\\.net/",
       "silver": "^abfss://silver@[a-z0-9]+\\.dfs\\.core\\.windows\\.net/",
       "gold": "^abfss://gold@[a-z0-9]+\\.dfs\\.core\\.windows\\.net/"
+    },
+    "esquemas_por_capa": {
+      "silver": [
+        "mmff",
+        "credicorp",
+        "externo",
+        "temp",
+        "dt_rest"
+      ],
+      "gold": []
+    },
+    "campos_auditoria": {
+      "obligatorios": [
+        "_ingestion_time",
+        "_processing_time"
+      ],
+      "solo_maestras": [
+        "_deleted_flg"
+      ]
     }
   },
   "limites": {
@@ -692,12 +764,7 @@
   "sin_cobertura": {
     "_descripcion": "Validaciones activas del checklist que ninguna capa evalua todavia. Se declaran aqui para que la brecha sea visible y no se descubra por ausencia.",
     "codigos": [
-      "ADB-DDL-03",
       "ADB-DDL-04",
-      "ADB-DDL-05",
-      "ADB-DDL-07",
-      "ADB-DDL-08",
-      "ADB-DDL-09",
       "ADB-DDL-15",
       "ADB-DDL-21",
       "ADB-DE-01",
@@ -708,7 +775,13 @@
       "ADB-NB-08",
       "ADL-DE-01",
       "ADL-DE-02"
-    ]
+    ],
+    "_pendientes": {
+      "ADB-DDL-04": "Falta el catalogo de sufijos de campo del modelo financiero.",
+      "ADB-DDL-21": "El entregable de modelamiento no viaja en el cambio propuesto.",
+      "ADL-DE-01": "El anexo remite al area y no lista los tipos de archivo validos.",
+      "ADL-DE-02": "Depende del mismo catalogo que ADL-DE-01."
+    }
   },
   "discrepancias_con_el_checklist": {
     "_descripcion": "Validaciones que el Checklist v4 clasifica como Hibrido o LLM y que este validador resuelve por condicion exacta. Se registran para que el area dueña del estandar decida si actualiza la clasificacion.",
@@ -740,5 +813,10 @@
       "ADB-LH-01",
       "ADB-LH-02"
     ]
-  }
+  },
+  "_cambios_3_3_0": [
+    "La auditoria y las etiquetas se reportan con el codigo de la capa que corresponde: bronze, silver o gold. Antes toda auditoria salia como ADB-DDL-02 y toda etiqueta como ADB-DDL-06.",
+    "Se agrega la validacion del esquema de la capa estandarizada (ADB-DDL-03).",
+    "Se declaran las listas de esquemas por capa."
+  ]
 }
