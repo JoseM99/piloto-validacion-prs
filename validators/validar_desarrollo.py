@@ -302,7 +302,20 @@ def reglas_logging(path, codigo):
                          "Falta: " + ", ".join(faltan)))
 
     if activa("NBK-22"):
-        if not re.search(r"logger\.(info|debug)\s*\(.*(param|widget)", limpio, re.I):
+        # Se acepta el registro cuando el log recibe alguna de las variables
+        # que vienen de los widgets. Buscar la palabra "parametro" en el texto
+        # del mensaje premia la redaccion y no el comportamiento.
+        registra = bool(re.search(
+            r"logger\.(info|debug)\s*\(.*(param|widget)", limpio, re.I))
+        if not registra:
+            del_widget = set(re.findall(
+                r"([A-Za-z_]\w*)\s*=\s*dbutils\.widgets\.get\s*\(", limpio))
+            if del_widget:
+                nombres = "|".join(sorted(re.escape(v) for v in del_widget))
+                registra = bool(re.search(
+                    r"logger\.(info|debug)\s*\([^\n]*\b(" + nombres + r")\b",
+                    limpio))
+        if not registra:
             out.append(h("NBK-22", path, "(sin registro de parametros)"))
 
     if activa("NBK-23"):
