@@ -277,6 +277,19 @@ def reglas_lakehouse(path, codigo):
 
 
 # ---------------------------------------------------------- logging · ADB-NB
+def _cuerpo_llamada(texto, inicio):
+    """Devuelve el contenido de una llamada, aunque ocupe varias lineas."""
+    nivel = 0
+    for i in range(inicio, len(texto)):
+        if texto[i] == "(":
+            nivel += 1
+        elif texto[i] == ")":
+            nivel -= 1
+            if nivel == 0:
+                return texto[inicio + 1:i]
+    return texto[inicio + 1:inicio + 300]
+
+
 def reglas_logging(path, codigo):
     out = []
     limpio = sin_comentarios(codigo)
@@ -319,10 +332,12 @@ def reglas_logging(path, codigo):
             del_widget = set(re.findall(
                 r"([A-Za-z_]\w*)\s*=\s*dbutils\.widgets\.get\s*\(", limpio))
             if del_widget:
-                nombres = "|".join(sorted(re.escape(v) for v in del_widget))
-                registra = bool(re.search(
-                    r"logger\.(info|debug)\s*\([^\n]*\b(" + nombres + r")\b",
-                    limpio))
+                for m in re.finditer(r"logger\.(?:info|debug)\s*\(", limpio):
+                    cuerpo = _cuerpo_llamada(limpio, m.end() - 1)
+                    if any(re.search(r"\b" + re.escape(v) + r"\b", cuerpo)
+                           for v in del_widget):
+                        registra = True
+                        break
         if not registra:
             out.append(h("NBK-22", path, "(sin registro de parametros)"))
 
