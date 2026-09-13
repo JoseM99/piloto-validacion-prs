@@ -102,6 +102,7 @@ def normalizar_cabecera(texto):
     lineas = []
     for ln in texto.split("\n"):
         ln = re.sub(r"^\s*(?:#|-{2,})+", "", ln)
+        ln = ln.replace("*", " ")
         lineas.append(ln.replace("|", " ").strip())
     return "\n".join(lineas)
 
@@ -145,13 +146,15 @@ def reglas_notebook(path, codigo, markdown):
             (markdown or "")
             + "\n" + (bloque_py.group(0) if bloque_py else "")
             + "\n" + (bloque_sql.group(0) if bloque_sql else ""))
+        # Las etiquetas de version, desarrollador y fecha van en una fila de
+        # tabla, no al inicio de linea. Se buscan en todo el bloque.
         faltan = [k for k, pat in [
-            ("objetivo", r"^\s*(objetivo|proyecto)\b"),
-            ("version", r"^\s*versi[oó]n?\b"),
-            ("desarrollador", r"^\s*(desarrollador|autor)\b"),
-            ("fecha", r"^\s*fecha\b"),
-            ("tabla fuente", r"^\s*(tabla\s+fuente|fuente|origen)\b"),
-            ("tabla destino", r"^\s*(tabla\s+destino|destino)\b"),
+            ("objetivo", r"\b(objetivo|proyecto)\b"),
+            ("version", r"\bversi[oó]n?\b"),
+            ("desarrollador", r"\b(desarrollador|autor)\b"),
+            ("fecha", r"\bfecha\b"),
+            ("tabla fuente", r"\b(tabla\s+fuente|fuente|origen)\b"),
+            ("tabla destino", r"\b(tabla\s+destino|destino)\b"),
         ] if not re.search(pat, cabecera, re.I | re.M)]
         if faltan:
             out.append(h("NBK-01", path, cabecera[:120],
@@ -407,11 +410,35 @@ def _capa(objeto):
     return None
 
 
+def resolver_referencias(codigo):
+    """Sustituye las referencias {VARIABLE} por el literal que se les asigno.
+
+    Los nombres de tabla se arman con f-string y una variable de ambiente. Sin
+    esta sustitucion el nombre del objeto llega como {TBL_X} y ninguna regla de
+    tabla o campo se llega a evaluar.
+    """
+    mapa = {}
+    for m in re.finditer(
+            r"""^[ \t]*([A-Za-z_]\w*)[ \t]*=[ \t]*f?["']([^"'\n]*)["'][ \t]*$""",
+            codigo, re.M):
+        mapa[m.group(1)] = m.group(2)
+    if not mapa:
+        return codigo
+    for _ in range(3):
+        nuevo = re.sub(r"\{([A-Za-z_]\w*)\}",
+                       lambda x: mapa.get(x.group(1), x.group(0)), codigo)
+        if nuevo == codigo:
+            break
+        codigo = nuevo
+    return codigo
+
+
 def reglas_ddl(path, codigo):
     out = []
+    codigo = resolver_referencias(codigo)
     for m in re.finditer(
             r"CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?"
-            r"([`\w.]+)\s*\(([\s\S]*?)\)\s*(?:USING|COMMENT|PARTITIONED|"
+            r"([`\w.{}]+)\s*\(([\s\S]*?)\)\s*(?:USING|COMMENT|PARTITIONED|"
             r"CLUSTER|TBLPROPERTIES|;|$)", codigo, re.I):
         objeto = m.group(1).replace("`", "")
         cuerpo = m.group(2)
