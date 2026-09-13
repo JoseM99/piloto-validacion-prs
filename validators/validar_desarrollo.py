@@ -240,6 +240,14 @@ def reglas_notebook(path, codigo, markdown):
         for m in re.finditer(r"(mergeSchema|overwriteSchema)", limpio):
             out.append(h("NBK-15", path, m.group(0), None, nro_linea(limpio, m.start())))
 
+    # ADB-NB-13 · proyeccion con asterisco en la interfaz de PySpark. El otro
+    # detector solo mira las consultas en texto y deja pasar este caso.
+    if activa("NBK-13"):
+        for m in re.finditer(r"""\.select\s*\(\s*(?:["']\*["']|\*)\s*\)""",
+                             limpio):
+            out.append(h("NBK-13", path, m.group(0).strip(), None,
+                         nro_linea(limpio, m.start())))
+
     # ADB-NB-19 · operaciones que trasladan datos
     if activa("NBK-19"):
         m = re.search(r"\.(collect|toPandas|take)\s*\(", limpio)
