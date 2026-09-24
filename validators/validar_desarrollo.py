@@ -1,4 +1,4 @@
-  """Validador de desarrollo: Lakehouse y Data Factory.
+"""Validador de desarrollo: Lakehouse y Data Factory.
 
 Reglas deterministas del Checklist v4. Corre en el runner de GitHub Actions.
 Toda la definicion de reglas, listas y limites vive en el catalogo.
@@ -416,6 +416,11 @@ def reglas_rutas(path, codigo):
         return out
 
     mapa = {"bronze": "ADL-02", "silver": "ADL-03", "gold": "ADL-04"}
+
+    # Las rutas se arman con f-string y una variable de ambiente. Se resuelve la
+    # referencia para que el nombre del storage no llegue con llaves.
+    codigo = resolver_referencias(codigo)
+    codigo = re.sub(r"\{[^{}\n]{1,60}\}", "prod", codigo)
 
     for m in re.finditer(r"abfss://([a-z0-9\-]+)@([^\"'\s\)]+)", codigo, re.I):
         contenedor = m.group(1).lower()
