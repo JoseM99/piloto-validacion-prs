@@ -1,4 +1,4 @@
-"""Validador de desarrollo: Lakehouse y Data Factory.
+  """Validador de desarrollo: Lakehouse y Data Factory.
 
 Reglas deterministas del Checklist v4. Corre en el runner de GitHub Actions.
 Toda la definicion de reglas, listas y limites vive en el catalogo.
@@ -139,9 +139,11 @@ def reglas_notebook(path, codigo, markdown):
     # ADB-NB-01 · cabecera. Se aceptan los tres estilos: markdown, comentarios
     # de Python y comentarios de celda SQL.
     if activa("NBK-01"):
-        crudo = codigo[:3000]
-        bloque_py = re.search(r"(?:^[ \t]*#.*\n){3,}", crudo, re.M)
-        bloque_sql = re.search(r"(?:^[ \t]*-{2,}.*\n){3,}", crudo, re.M)
+        # El bloque inicial de comentarios se toma completo. Un corte fijo deja
+        # fuera las etiquetas cuando la cabecera lista muchas tablas fuente.
+        crudo = codigo[:60000]
+        bloque_py = re.search(r"(?:^[ \t]*#.*\n|^[ \t]*\n){3,}", crudo, re.M)
+        bloque_sql = re.search(r"(?:^[ \t]*-{2,}.*\n|^[ \t]*\n){3,}", crudo, re.M)
         cabecera = normalizar_cabecera(
             (markdown or "")
             + "\n" + (bloque_py.group(0) if bloque_py else "")
